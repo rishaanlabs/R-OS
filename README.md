@@ -65,7 +65,81 @@ app/src/main/java/com/rishaanlabs/ros/
 
 ---
 
-## How to Run
+## Installing a Test Build on Android
+
+You do not need a computer, Android Studio, a USB cable, ADB, or any command-line tool.
+Everything below is done on the phone, in a browser and the Files app.
+
+### 1. Get the APK
+
+1. Open **https://github.com/rishaanlabs/R-OS** in your phone's browser.
+2. Tap the **☰ menu** (or scroll across the tab strip) and choose **Actions**.
+3. In the left list, tap **Build Android APK**.
+4. Tap the **topmost run with a green ✅ tick**. A red ❌ means that build failed — pick
+   the newest green one instead.
+5. Scroll to the bottom of that page to the **Artifacts** section.
+6. Tap **rishaan-os-debug**. It downloads as a `.zip` file.
+
+> On some phones GitHub's mobile site hides the Artifacts section. If you cannot see it,
+> tap the browser menu and choose **Desktop site**, then scroll to the bottom again.
+
+### 2. Get the APK out of the ZIP
+
+GitHub always hands out Actions artifacts as a ZIP, so there is one extra step:
+
+7. Open your **Files** app (on Samsung it is called **My Files**) and go to **Downloads**.
+8. Tap **rishaan-os-debug.zip**.
+9. Choose **Extract** (some file managers say *Unzip* or *Extract all*).
+10. Inside you will find **Rishaan-OS-v0.1.0-debug.apk**.
+
+### 3. Install it
+
+11. Tap **Rishaan-OS-v0.1.0-debug.apk**.
+12. Android will warn that this app came from outside the Play Store. Tap **Settings** on that
+    prompt, then turn on **Allow from this source**, then tap **Back**. You only have to do
+    this once per app (your browser or your file manager).
+13. Tap **Install**.
+14. Tap **Open**. Rishaan OS starts on the Home screen.
+
+If Play Protect says the app is unrecognised, tap **More details → Install anyway**. That is
+expected for a personal build that was never submitted to Google.
+
+### 4. Asking for a fresh build from your phone
+
+You do not have to wait for someone to push code:
+
+1. Repository → **Actions** → **Build Android APK**.
+2. Tap **Run workflow**, pick the branch, tap the green **Run workflow** button.
+3. Wait roughly five minutes, refresh, then follow step 1 above to download the new APK.
+
+### 5. Installing a newer build later
+
+Just install the new APK on top of the old one — **do not uninstall first**. All builds are
+signed with the same key that is stored in this repository, so Android treats a new build as an
+upgrade and **your tasks, projects, and notes are preserved**. Uninstalling would delete the
+database.
+
+If an install is ever refused with *"App not installed"*, that means the signature changed; in
+that case uninstall Rishaan OS first, accepting that its data is lost.
+
+### Shortcut: install from Releases instead
+
+Downloading a ZIP and extracting it is fiddly on a phone. There is a second, easier route:
+
+1. Repository → **Actions** → **Publish Test Release APK** → **Run workflow**, enter a version
+   such as `0.1.0`, and run it.
+2. When it finishes, go to the repository home page → **Releases**.
+3. Tap **Rishaan OS v0.1.0 (test build)** and tap the `.apk` file under **Assets**.
+4. It downloads as an APK directly — no ZIP, no extracting. Continue from step 11 above.
+
+That workflow only ever runs when you trigger it by hand, and every build it publishes is
+marked as a **prerelease** to keep test builds clearly separate from real releases.
+
+---
+
+## Building from a Computer (optional)
+
+If you ever do have a development machine:
 
 1. Open the project in Android Studio (Ladybug or later recommended)
 2. Ensure you have a device or emulator running API 26+
