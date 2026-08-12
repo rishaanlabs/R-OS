@@ -38,11 +38,20 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Run unit tests
-        run: ./gradlew test --no-daemon --stacktrace
+      # Tee the output so the next step can pull the compiler errors back out. Without this a
+      # failure buries the one useful line under a few hundred lines of Gradle stack trace.
+      - name: Run unit tests and build debug APK
+        run: |
+          set -o pipefail
+          ./gradlew test assembleDebug --no-daemon 2>&1 | tee build.log
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Summarise build errors
+        if: failure()
+        run: |
+          echo "===== compiler errors ====="
+          grep -E '^e: |^error: ' build.log | head -60 || echo "(no compiler error lines)"
+          echo "===== what went wrong ====="
+          sed -n '/What went wrong/,/^\* Try/p' build.log | head -40 || true
 
       # Fail loudly here rather than uploading a silently empty artifact.
       - name: Verify APK exists and give it a readable name
