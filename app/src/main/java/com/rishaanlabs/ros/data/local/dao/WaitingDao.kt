@@ -8,7 +8,10 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface WaitingDao {
 
-    @Query("SELECT * FROM waiting_items WHERE status IN ('WAITING', 'FOLLOW_UP_DUE') ORDER BY followUpDate ASC NULLS LAST")
+    // "followUpDate IS NULL" sorts 0 before 1, which puts dated items first and undated ones
+    // last. NULLS LAST would say this more directly, but SQLite only understands it from 3.30
+    // (Android 11), and this app supports Android 8.
+    @Query("SELECT * FROM waiting_items WHERE status IN ('WAITING', 'FOLLOW_UP_DUE') ORDER BY followUpDate IS NULL, followUpDate ASC")
     fun observeActive(): Flow<List<WaitingItem>>
 
     @Query("SELECT * FROM waiting_items ORDER BY createdAt DESC")
