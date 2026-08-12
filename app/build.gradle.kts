@@ -20,7 +20,23 @@ android {
         testInstrumentationRunner = "com.rishaanlabs.ros.HiltTestRunner"
     }
 
+    // A debug keystore is checked into the repository on purpose. Without it every CI machine
+    // generates its own throwaway key, so each new build is signed differently and Android
+    // refuses to install it over the previous one — forcing an uninstall that wipes the local
+    // Room database. A fixed key lets test builds upgrade in place and keep their data.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
@@ -89,6 +105,9 @@ dependencies {
     testImplementation(libs.room.testing)
     androidTestImplementation(libs.junit.ext)
     androidTestImplementation(libs.espresso.core)
+    // HiltTestRunner references HiltTestApplication, which lives in hilt-android-testing.
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
     androidTestImplementation(platform(libs.compose.bom))
     androidTestImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.tooling)
