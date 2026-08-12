@@ -108,7 +108,9 @@ jobs:
             --prerelease \
             --target "$GITHUB_SHA"
 
+          # The release is already published by this point, so a hiccup reading it back
+          # should not fail the job.
           {
             echo "### Published $TAG"
-            gh release view "$TAG" --json url --jq .url
+            gh release view "$TAG" --json url --jq .url || echo "(could not read the release URL back)"
           } >> "$GITHUB_STEP_SUMMARY"
