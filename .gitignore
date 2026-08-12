@@ -1,0 +1,22 @@
+# Build artifacts
+.gradle/
+build/
+app/build/
+*.apk
+*.aar
+*.ap_
+*.aab
+
+# IntelliJ/Android Studio
+.idea/
+*.iml
+*.iws
+local.properties
+.DS_Store
+
+# Generated files
+app/src/main/java/com/rishaanlabs/ros/data/local/RosDatabase_Impl*
+app/schemas/
+
+# Dependency cache
+.gradle/

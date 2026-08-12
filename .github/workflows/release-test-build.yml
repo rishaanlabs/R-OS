@@ -1,0 +1,116 @@
+name: Publish Test Release APK
+
+# Manual only. This never runs on a push, so it cannot publish a release by accident.
+# Use it when you want an APK you can tap straight from the Releases page instead of
+# unzipping an Actions artifact.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version for this test build (e.g. 0.1.0 or 0.1.1)'
+        required: true
+        default: '0.1.0'
+      notes:
+        description: 'What changed in this build? (optional)'
+        required: false
+        default: ''
+
+jobs:
+  release:
+    name: Build and publish test release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Prepare APK
+        id: apk
+        env:
+          # Passed through the environment, never interpolated into the script body.
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Only accept a plain dotted version, so the value cannot become shell or a bad tag.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$'; then
+            echo "::error::Version must look like 0.1.0 — got '$VERSION'"
+            exit 1
+          fi
+
+          BUILT=app/build/outputs/apk/debug/app-debug.apk
+          if [ ! -f "$BUILT" ]; then
+            echo "::error::No APK at $BUILT"
+            find app/build/outputs -name '*.apk' -print || echo "(no APK anywhere under app/build/outputs)"
+            exit 1
+          fi
+
+          NAME="Rishaan-OS-v${VERSION}-debug.apk"
+          mkdir -p artifact
+          cp "$BUILT" "artifact/${NAME}"
+
+          echo "name=${NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}-test" >> "$GITHUB_OUTPUT"
+          ls -lh "artifact/${NAME}"
+
+      - name: Create prerelease and attach APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          NOTES: ${{ inputs.notes }}
+          TAG: ${{ steps.apk.outputs.tag }}
+          APK: ${{ steps.apk.outputs.name }}
+        run: |
+          set -euo pipefail
+
+          # Quoted delimiter: the body is written literally, so nothing in NOTES is executed.
+          BODY=$(cat <<'EOF'
+          **Test build — not a production release.**
+
+          This is a *debug* build of Rishaan OS, signed with the repository's shared debug key.
+          It is meant for installing on your own phone to try the app. Do not distribute it.
+          EOF
+          )
+          BODY="${BODY}"$'\n\n'"- Version: ${VERSION}"$'\n'"- Commit: ${GITHUB_SHA:0:7}"
+          BODY="${BODY}"$'\n'"- Built: $(date -u '+%Y-%m-%d %H:%M UTC')"
+          if [ -n "$NOTES" ]; then
+            BODY="${BODY}"$'\n\n'"${NOTES}"
+          fi
+          BODY="${BODY}"$'\n\n'"## Install on Android"$'\n'"Tap ${APK} below to download it, then open it from your notifications or Downloads and tap **Install**. If Android asks, allow installs from this app. See the README for the full walkthrough."
+
+          # A tag that already exists means this version was published before; replace the
+          # release rather than failing, so re-running with the same version is safe.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+
+          gh release create "$TAG" \
+            "artifact/${APK}" \
+            --title "Rishaan OS v${VERSION} (test build)" \
+            --notes "$BODY" \
+            --prerelease \
+            --target "$GITHUB_SHA"
+
+          # The release is already published by this point, so a hiccup reading it back
+          # should not fail the job.
+          {
+            echo "### Published $TAG"
+            gh release view "$TAG" --json url --jq .url || echo "(could not read the release URL back)"
+          } >> "$GITHUB_STEP_SUMMARY"
