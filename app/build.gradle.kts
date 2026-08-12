@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -59,10 +60,14 @@ android {
         compose = true
     }
 
-    // Tell Room where to write the schema export files so we can version migrations.
-    ksp {
-        arg("room.schemaLocation", "$projectDir/schemas")
-    }
+}
+
+// Tell Room where to write the schema export files so we can version migrations.
+// This goes through the Room Gradle plugin rather than a raw ksp argument: the plugin gives
+// each build variant its own schema directory, and pointing every variant at one shared
+// directory made kspDebugKotlin and kspReleaseKotlin collide and fail with "Empty schema file".
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 dependencies {
