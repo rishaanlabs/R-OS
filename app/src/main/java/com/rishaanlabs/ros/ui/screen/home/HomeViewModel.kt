@@ -34,13 +34,13 @@ data class HomeUiState(
     val otherTasks: List<Task> = emptyList(),
     val attention: List<AttentionItem> = emptyList(),
     val inboxCount: Int = 0,
-    val unfinishedCount: Int = 0,
+    /** Open work that was meant to happen on or before today — the Plan My Day review list. */
+    val unfinished: List<Task> = emptyList(),
+    /** Everything Plan My Day may offer as a priority. */
+    val priorityCandidates: List<Task> = emptyList(),
     val loaded: Boolean = false
 ) {
-    /** Candidates for the Plan My Day review: overdue or previously scheduled, still open. */
-    val hasAnythingToShow: Boolean
-        get() = topPriorities.isNotEmpty() || otherTasks.isNotEmpty() ||
-            attention.isNotEmpty() || inboxCount > 0
+    val unfinishedCount: Int get() = unfinished.size
 }
 
 @HiltViewModel
@@ -77,6 +77,10 @@ class HomeViewModel @Inject constructor(
             today = today
         )
 
+        // Computed here rather than in the sheet so the count Home shows and the list Plan My Day
+        // reviews can never disagree — they are the same list.
+        val unfinished = unfinishedCandidates(openTasks, today)
+
         HomeUiState(
             greeting = greetingFor(LocalTime.now()),
             date = today,
@@ -86,7 +90,10 @@ class HomeViewModel @Inject constructor(
             // attention list.
             attention = allAttention.filterNot { it.kind == AttentionKind.INBOX_UNPROCESSED },
             inboxCount = inboxCount,
-            unfinishedCount = unfinishedCandidates(openTasks, today).size,
+            unfinished = unfinished,
+            // A priority can be chosen from anything open and relevant today, not only from what
+            // today's query happened to return.
+            priorityCandidates = (priorities + other + unfinished).distinctBy { it.id },
             loaded = true
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())

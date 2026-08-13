@@ -1,5 +1,6 @@
 package com.rishaanlabs.ros.ui.screen.home
 
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +10,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -24,13 +29,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rishaanlabs.ros.data.local.entity.Task
 import com.rishaanlabs.ros.domain.attention.AttentionEngine
 import com.rishaanlabs.ros.ui.components.SectionHeader
-import com.rishaanlabs.ros.ui.components.TaskRow
 
 private enum class PlanStep { REVIEW, CHOOSE }
 
@@ -65,10 +70,7 @@ fun PlanMyDaySheet(
         ) {
             when (step) {
                 PlanStep.REVIEW -> ReviewStep(
-                    tasks = HomeViewModel.unfinishedCandidates(
-                        state.topPriorities + state.otherTasks,
-                        state.date
-                    ),
+                    tasks = state.unfinished,
                     onToday = viewModel::scheduleForToday,
                     onLater = viewModel::scheduleForLater,
                     onSomeday = viewModel::moveToSomeday,
@@ -77,7 +79,7 @@ fun PlanMyDaySheet(
                 )
 
                 PlanStep.CHOOSE -> ChooseStep(
-                    candidates = (state.topPriorities + state.otherTasks).distinctBy { it.id },
+                    candidates = state.priorityCandidates,
                     chosen = state.topPriorities.map { it.id }.toSet(),
                     onToggle = viewModel::toggleTopPriority,
                     onFinish = onDismiss
@@ -188,19 +190,13 @@ private fun ChooseStep(
         } else {
             LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                 items(candidates, key = { it.id }) { task ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TaskRow(
-                            title = task.title,
-                            completed = task.id in chosen,
-                            metadata = if (task.id in chosen) listOf("Priority") else emptyList(),
-                            onClick = { onToggle(task) },
-                            onToggleComplete = { onToggle(task) },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
+                    // Not a TaskRow: its control means "mark as done", and reusing it here would
+                    // tell a screen reader the wrong thing about what tapping does.
+                    ChoiceRow(
+                        title = task.title,
+                        selected = task.id in chosen,
+                        onToggle = { onToggle(task) }
+                    )
                 }
             }
         }
@@ -213,5 +209,39 @@ private fun ChooseStep(
         ) {
             Button(onClick = onFinish) { Text("Done") }
         }
+    }
+}
+
+/** A row whose control means "choose this", stated as a selection rather than a completion. */
+@Composable
+private fun ChoiceRow(
+    title: String,
+    selected: Boolean,
+    onToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = selected,
+                onValueChange = { onToggle() },
+                role = Role.Checkbox
+            )
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+            // The toggleable row already announces its state, so the icon must not repeat it.
+            contentDescription = null,
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(end = 16.dp)
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

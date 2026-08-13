@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,15 +66,11 @@ fun InboxScreen(
     viewModel: InboxViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    var mode by remember { mutableStateOf(InboxMode.PROCESS) }
 
-    // Once the queue is empty there is nothing to process, so fall back to the list rather than
-    // leaving the user staring at a mode that cannot do anything.
-    LaunchedEffect(state.loaded, state.unprocessed.isEmpty()) {
-        if (state.loaded && state.unprocessed.isEmpty() && state.all.isNotEmpty()) {
-            mode = InboxMode.LIST
-        }
-    }
+    // Process mode is the default and stays selected even when the queue empties, because
+    // "Inbox clear." is the reward for finishing — silently switching to a list of already-handled
+    // items would take that away.
+    var mode by remember { mutableStateOf(InboxMode.PROCESS) }
 
     Scaffold(
         topBar = {
@@ -99,8 +94,7 @@ fun InboxScreen(
                     SegmentedButton(
                         selected = mode == InboxMode.PROCESS,
                         onClick = { mode = InboxMode.PROCESS },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        enabled = state.unprocessed.isNotEmpty()
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
                     ) { Text("Process") }
                     SegmentedButton(
                         selected = mode == InboxMode.LIST,
@@ -113,16 +107,14 @@ fun InboxScreen(
             when {
                 !state.loaded -> Unit
 
-                state.unprocessed.isEmpty() && state.all.isEmpty() -> InboxZeroState()
-
                 mode == InboxMode.PROCESS && state.current != null -> ProcessMode(
                     item = state.current!!,
                     remaining = state.remaining,
                     total = state.all.size,
                     projects = state.projects,
-                    onProcess = { destination, projectId, date, priority, person ->
+                    onProcess = { item, destination, projectId, date, priority, person ->
                         viewModel.process(
-                            item = state.current!!,
+                            item = item,
                             destination = destination,
                             projectId = projectId,
                             date = date,
@@ -159,7 +151,7 @@ private fun ProcessMode(
     remaining: Int,
     total: Int,
     projects: List<Project>,
-    onProcess: (ProcessDestination, String?, LocalDate?, TaskPriority, String) -> Unit,
+    onProcess: (InboxItem, ProcessDestination, String?, LocalDate?, TaskPriority, String) -> Unit,
     onDelete: () -> Unit
 ) {
     // Keyed on the item so each new item starts from a clean slate rather than inheriting the
@@ -285,7 +277,7 @@ private fun ProcessMode(
             TextButton(onClick = onDelete) { Text("Discard") }
             Button(
                 onClick = {
-                    destination?.let { onProcess(it, projectId, date, priority, person) }
+                    destination?.let { onProcess(item, it, projectId, date, priority, person) }
                 },
                 enabled = destination != null
             ) { Text("Process") }
