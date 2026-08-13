@@ -99,6 +99,7 @@ fun RosNavHost() {
                     onNavigateToInbox = { navController.navigate(Screen.Inbox.route) },
                     onNavigateToTask = { navController.navigate(Screen.TaskDetail.withId(it)) },
                     onNavigateToWaiting = { navController.navigate(Screen.WaitingList.route) },
+                    onNavigateToProject = { navController.navigate(Screen.ProjectDetail.withId(it)) },
                     onCapture = { showCapture = true }
                 )
             }

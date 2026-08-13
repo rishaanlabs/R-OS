@@ -1,6 +1,6 @@
 # Rishaan OS
 
-**Version:** 0.1.0  
+**Version:** 0.1.1  
 **Platform:** Android (API 26+)
 
 Rishaan OS is an Android-first personal operating system — an external OS for your life. It helps you answer five fundamental questions:
@@ -65,6 +65,49 @@ app/src/main/java/com/rishaanlabs/ros/
 
 ---
 
+## What's New in V0.1.1
+
+V0.1.1 adds almost nothing to store. It changes how what you already have is presented, so the
+app reads less like a database of tasks and more like a briefing of what deserves your attention.
+
+**Home is now a daily briefing.** It opens with your chosen priorities for the day, then what
+needs attention, then what you have not processed, then everything else. The order is the point:
+if you read only the first screenful, you should already know what your day is.
+
+**Top 3 priorities are chosen, not calculated.** "High priority" answers *how important is this*.
+Your Top 3 answers a different question — *if today falls apart, what do I still want done?*
+Pick up to three from **Plan my day**. Zero is a valid answer.
+
+**Plan My Day** is a two-step flow: decide what happens to unfinished work (Today / Later /
+Someday / Cancel), then choose today's few priorities. No timeboxing or capacity planning.
+
+**Capture asks for text and nothing else.** Tap +, type, save. You are never made to decide what
+a thought *is* before you are allowed to write it down. A type chip is there if you already know,
+and tapping it again clears it.
+
+**The Inbox processes instead of listing.** It opens on one item with one question — Task,
+Waiting or Note — and moves straight to the next, showing how many are left. The follow-up
+questions match your answer: a Waiting item asks who you are waiting on, a Task does not. A List
+mode is still available for scanning.
+
+**Projects read as context.** A project leads with its outcome and its next action, then anything
+blocking it, then progress as plain counts. Tasks, waiting items and notes sit behind summary
+rows, so notes are no longer fifty tasks away. If a next action points at a task you have since
+completed, the project says it needs a new one rather than quietly showing stale information.
+
+**Needs Attention** is a new deterministic layer — not AI. It reads your current data and tells
+you when a follow-up is overdue, a project has no next action, a task has slipped, or a project
+has gone quiet. Only genuinely time-sensitive items use a warning colour; the rest stay calm.
+
+### Upgrading from V0.1.0
+
+**Your data is preserved.** V0.1.1 changes no database structure, and the app is signed with the
+same key, so it installs straight over V0.1.0 as an ordinary update.
+
+**Do not uninstall V0.1.0 first.** Uninstalling deletes the database and everything in it.
+
+---
+
 ## Installing a Test Build on Android
 
 You do not need a computer, Android Studio, a USB cable, ADB, or any command-line tool.
@@ -90,11 +133,11 @@ GitHub always hands out Actions artifacts as a ZIP, so there is one extra step:
 7. Open your **Files** app (on Samsung it is called **My Files**) and go to **Downloads**.
 8. Tap **rishaan-os-debug.zip**.
 9. Choose **Extract** (some file managers say *Unzip* or *Extract all*).
-10. Inside you will find **Rishaan-OS-v0.1.0-debug.apk**.
+10. Inside you will find **Rishaan-OS-v0.1.1-debug.apk**.
 
 ### 3. Install it
 
-11. Tap **Rishaan-OS-v0.1.0-debug.apk**.
+11. Tap **Rishaan-OS-v0.1.1-debug.apk**.
 12. Android will warn that this app came from outside the Play Store. Tap **Settings** on that
     prompt, then turn on **Allow from this source**, then tap **Back**. You only have to do
     this once per app (your browser or your file manager).
@@ -127,9 +170,9 @@ that case uninstall Rishaan OS first, accepting that its data is lost.
 Downloading a ZIP and extracting it is fiddly on a phone. There is a second, easier route:
 
 1. Repository → **Actions** → **Publish Test Release APK** → **Run workflow**, enter a version
-   such as `0.1.0`, and run it.
+   such as `0.1.1`, and run it.
 2. When it finishes, go to the repository home page → **Releases**.
-3. Tap **Rishaan OS v0.1.0 (test build)** and tap the `.apk` file under **Assets**.
+3. Tap **Rishaan OS v0.1.1 (test build)** and tap the `.apk` file under **Assets**.
 4. It downloads as an APK directly — no ZIP, no extracting. Continue from step 11 above.
 
 That workflow only ever runs when you trigger it by hand, and every build it publishes is

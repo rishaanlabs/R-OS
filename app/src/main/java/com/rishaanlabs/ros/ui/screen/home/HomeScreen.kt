@@ -1,213 +1,228 @@
 package com.rishaanlabs.ros.ui.screen.home
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rishaanlabs.ros.data.local.entity.Task
-import com.rishaanlabs.ros.data.local.entity.TaskPriority
+import com.rishaanlabs.ros.domain.attention.AttentionTarget
+import com.rishaanlabs.ros.ui.components.AttentionCard
+import com.rishaanlabs.ros.ui.components.EmptyState
+import com.rishaanlabs.ros.ui.components.Metadata
+import com.rishaanlabs.ros.ui.components.PriorityTaskCard
+import com.rishaanlabs.ros.ui.components.SectionHeader
+import com.rishaanlabs.ros.ui.components.TaskRow
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
-@OptIn(ExperimentalMaterial3Api::class)
+/**
+ * Home is a briefing, not a dashboard.
+ *
+ * The order of the sections is the argument: what I intend to do today, what has gone wrong
+ * without me, what I have not yet decided about, and only then everything else. A user who reads
+ * only the first screenful should already know what their day is.
+ */
 @Composable
 fun HomeScreen(
     onNavigateToInbox: () -> Unit,
     onNavigateToTask: (String) -> Unit,
     onNavigateToWaiting: () -> Unit,
+    onNavigateToProject: (String) -> Unit = {},
     onCapture: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle(HomeUiState())
-    val dateStr = LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM"))
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var planningDay by remember { mutableStateOf(false) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {},
-                actions = {
-                    IconButton(onClick = onCapture) {
-                        Icon(Icons.Default.Add, contentDescription = "Quick Capture")
-                    }
-                }
-            )
-        }
-    ) { padding ->
+    Scaffold { padding ->
         LazyColumn(
-            contentPadding = padding,
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
         ) {
-            // Header
             item {
-                Column(modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)) {
+                Column(modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 8.dp)) {
                     Text(
                         text = state.greeting,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.SemiBold
+                        style = MaterialTheme.typography.headlineMedium
                     )
                     Text(
-                        text = dateStr,
+                        text = state.date.format(DateTimeFormatter.ofPattern("EEEE, d MMMM")),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            // Top Priorities
+            // ------------------------------------------------------------ your day
             item {
-                SectionHeader(title = "Top Priorities")
-            }
-            if (state.topPriorityTasks.isEmpty()) {
-                item {
-                    EmptyHint("No top priorities set. Mark tasks as priority to see them here.")
-                }
-            } else {
-                items(state.topPriorityTasks) { task ->
-                    TaskRow(task = task, onClick = { onNavigateToTask(task.id) })
-                }
-            }
-
-            // Today
-            item { SectionHeader(title = "Today") }
-            if (state.todayTasks.isEmpty()) {
-                item { EmptyHint("Nothing scheduled for today.") }
-            } else {
-                items(state.todayTasks) { task ->
-                    TaskRow(task = task, onClick = { onNavigateToTask(task.id) })
-                }
-            }
-
-            // Waiting
-            item {
-                WaitingSummaryCard(
-                    count = state.waitingCount,
-                    overdueCount = state.waitingOverdueCount,
-                    onClick = onNavigateToWaiting
+                SectionHeader(
+                    title = "Your day",
+                    trailing = if (state.topPriorities.isNotEmpty()) "Plan" else null,
+                    onTrailingClick = { planningDay = true }
                 )
-            }
-
-            // Inbox
-            item {
-                InboxSummaryCard(count = state.inboxCount, onClick = onNavigateToInbox)
-            }
-
-            item { Spacer(modifier = Modifier.height(16.dp)) }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp)
-    )
-}
-
-@Composable
-private fun EmptyHint(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
-    )
-}
-
-@Composable
-private fun TaskRow(task: Task, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(task.title) },
-        supportingContent = if (task.priority != TaskPriority.NONE) {
-            { Text(task.priority.name.lowercase().replaceFirstChar { it.uppercase() }) }
-        } else null,
-        leadingContent = {
-            Icon(
-                Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        modifier = Modifier.clickable(onClick = onClick)
-    )
-    HorizontalDivider(modifier = Modifier.padding(horizontal = 24.dp))
-}
-
-@Composable
-private fun WaitingSummaryCard(count: Int, overdueCount: Int, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick),
-        colors = if (overdueCount > 0) {
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-        } else {
-            CardDefaults.cardColors()
-        }
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.Default.HourglassEmpty,
-                contentDescription = null,
-                tint = if (overdueCount > 0) MaterialTheme.colorScheme.error
-                       else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = if (count == 0) "Nothing waiting" else "$count item${if (count != 1) "s" else ""} waiting",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                if (overdueCount > 0) {
+                if (state.topPriorities.isNotEmpty() || state.otherTasks.isNotEmpty()) {
                     Text(
-                        text = "$overdueCount follow-up${if (overdueCount != 1) "s" else ""} overdue",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        text = summarise(state.topPriorities.size, state.otherTasks.size),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp)
                     )
                 }
             }
+
+            if (state.topPriorities.isEmpty()) {
+                item {
+                    if (state.otherTasks.isEmpty() && state.loaded) {
+                        EmptyState(
+                            message = "Your day is clear.",
+                            supporting = "Nothing is scheduled. That is allowed.",
+                            actionLabel = "Plan my day",
+                            onAction = { planningDay = true }
+                        )
+                    } else {
+                        EmptyState(
+                            message = "Nothing chosen yet.",
+                            supporting = "Choose what matters most today.",
+                            actionLabel = "Plan my day",
+                            onAction = { planningDay = true }
+                        )
+                    }
+                }
+            } else {
+                items(state.topPriorities, key = { "priority-${it.id}" }) { task ->
+                    PriorityTaskCard(
+                        title = task.title,
+                        metadata = metadataFor(task, state.date),
+                        overdue = isOverdue(task, state.date),
+                        onClick = { onNavigateToTask(task.id) },
+                        onToggleComplete = { viewModel.completeTask(task) }
+                    )
+                }
+            }
+
+            // ---------------------------------------------------- needs attention
+            if (state.attention.isNotEmpty()) {
+                item { SectionHeader(title = "Needs attention", modifier = Modifier.padding(top = 16.dp)) }
+                items(state.attention, key = { it.id }) { item ->
+                    AttentionCard(
+                        item = item,
+                        onClick = {
+                            when (item.target) {
+                                AttentionTarget.TASK -> item.targetId?.let(onNavigateToTask)
+                                AttentionTarget.PROJECT -> item.targetId?.let(onNavigateToProject)
+                                AttentionTarget.WAITING -> onNavigateToWaiting()
+                                AttentionTarget.INBOX -> onNavigateToInbox()
+                                AttentionTarget.NONE -> Unit
+                            }
+                        }
+                    )
+                }
+            } else if (state.loaded) {
+                item {
+                    SectionHeader(title = "Needs attention", modifier = Modifier.padding(top = 16.dp))
+                    Text(
+                        text = "Nothing needs attention right now.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            // -------------------------------------------------------------- inbox
+            if (state.inboxCount > 0) {
+                item {
+                    SectionHeader(title = "Inbox", modifier = Modifier.padding(top = 16.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onNavigateToInbox)
+                            .padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = if (state.inboxCount == 1) {
+                                "1 thing needs processing"
+                            } else {
+                                "${state.inboxCount} things need processing"
+                            },
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            }
+
+            // -------------------------------------------------------- later today
+            if (state.otherTasks.isNotEmpty()) {
+                item { SectionHeader(title = "Later today", modifier = Modifier.padding(top = 16.dp)) }
+                items(state.otherTasks, key = { "other-${it.id}" }) { task ->
+                    TaskRow(
+                        title = task.title,
+                        metadata = metadataFor(task, state.date),
+                        overdue = isOverdue(task, state.date),
+                        onClick = { onNavigateToTask(task.id) },
+                        onToggleComplete = { viewModel.completeTask(task) }
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
+    }
+
+    if (planningDay) {
+        PlanMyDaySheet(
+            onDismiss = { planningDay = false },
+            viewModel = viewModel
+        )
     }
 }
 
-@Composable
-private fun InboxSummaryCard(count: Int, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Inbox, contentDescription = null)
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = if (count == 0) "Inbox is clear" else "$count item${if (count != 1) "s" else ""} to process",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
-            )
-        }
-    }
+private fun summarise(priorities: Int, others: Int): String {
+    val parts = mutableListOf<String>()
+    if (priorities > 0) parts += if (priorities == 1) "1 priority" else "$priorities priorities"
+    if (others > 0) parts += if (others == 1) "1 other task" else "$others other tasks"
+    return parts.joinToString(" · ")
+}
+
+private fun isOverdue(task: Task, today: LocalDate): Boolean {
+    val due = task.dueDate?.toLocalDate() ?: return false
+    return due.isBefore(today)
+}
+
+/** Only shows what is actually known, so cards stay quiet when there is nothing to say. */
+private fun metadataFor(task: Task, today: LocalDate): List<String> {
+    val metadata = mutableListOf<String>()
+    task.dueDate?.let { metadata += Metadata.dueLabel(it.toLocalDate(), today) }
+    return metadata
 }
