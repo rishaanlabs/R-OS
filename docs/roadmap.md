@@ -1,6 +1,6 @@
 # Rishaan OS — Roadmap
 
-## V0.1 — Foundation (Current)
+## V0.1.0 — Foundation (shipped)
 
 Core personal management system for daily use.
 
@@ -16,12 +16,43 @@ Core personal management system for daily use.
 - [x] Global Search
 - [x] Dark mode
 
+## V0.1.1 — Core UX (current)
+
+Nothing new to store; the same information, presented so it can be acted on.
+
+- [x] Home as a daily briefing — priorities dominant, attention, inbox, then the rest
+- [x] Top 3 priorities chosen by the user, not inferred from the priority field
+- [x] Plan My Day — review unfinished work, then choose today's few
+- [x] Needs Attention: a deterministic rule engine over existing state, unit-tested
+- [x] Capture reduced to text plus an optional type; nothing is required
+- [x] Inbox split into Process (one item, one decision) and List
+- [x] Inbox conversion carries project, date, priority and person
+- [x] Project pages lead with outcome, next action and blockers
+- [x] Next action validated against real open tasks; stale pointers treated as missing
+- [x] Recent activity derived from timestamps already in the schema
+- [x] Shared component set so screens stay visually consistent
+- [x] No schema change — V0.1.0 databases upgrade in place
+
+### Deferred out of V0.1.1, with reasons
+
+- [ ] **Date and project at capture time** — `InboxItem` has no column for either. Both are
+      classification decisions and belong to processing, so this waits until a migration is
+      needed for another reason.
+- [ ] **Activity history** — `Recent` is currently derived from `completedAt`, `createdAt` and
+      `resolvedAt`. Real history (edits, status changes, previous values) needs its own table
+      and design; a half-version would have meant migrating a database holding real data.
+- [ ] **Plan My Day: durations, capacity, timeboxing** — deliberately out of scope. These need a
+      stronger model than V0.1.1 has, and a weak version would make the feature worse.
+
 ## V0.2 — Depth
 
 - [ ] Areas of Life (group projects by area: Work, Personal, Health, etc.)
 - [ ] Goals (link projects to longer-term outcomes)
 - [ ] Idea Incubator (capture and develop ideas)
 - [ ] Android home-screen widget (quick capture + today summary)
+- [ ] Share to R-OS (Android share-sheet target into the Inbox)
+- [ ] App long-press shortcut straight into Capture
+- [ ] Image and file capture into the Inbox
 - [ ] Recurring tasks
 - [ ] Routines
 - [ ] Voice capture
