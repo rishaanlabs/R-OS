@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.Note
@@ -21,6 +22,7 @@ fun MoreScreen(
     onNavigateToInbox: () -> Unit,
     onNavigateToNotes: () -> Unit,
     onNavigateToWaiting: () -> Unit,
+    onNavigateToFinance: () -> Unit,
     onNavigateToSearch: () -> Unit,
     onNavigateToDailyReview: () -> Unit
 ) {
@@ -31,6 +33,7 @@ fun MoreScreen(
             item { MoreItem(Icons.Default.Inbox, "Inbox", onNavigateToInbox) }
             item { MoreItem(Icons.Default.Note, "Notes", onNavigateToNotes) }
             item { MoreItem(Icons.Default.HourglassEmpty, "Waiting", onNavigateToWaiting) }
+            item { MoreItem(Icons.Default.AccountBalanceWallet, "Finance", onNavigateToFinance) }
             item { MoreItem(Icons.Default.Search, "Search", onNavigateToSearch) }
             item { MoreItem(Icons.Default.WbSunny, "Daily Review", onNavigateToDailyReview) }
         }
