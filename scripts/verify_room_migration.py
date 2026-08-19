@@ -47,9 +47,26 @@ TABLE_POSITIONS = re.compile(
 )
 
 
+TOKEN = re.compile(r"`[^`]*`|[(),;]|[A-Za-z_][A-Za-z0-9_]*|\S")
+
+
 def normalise(sql: str) -> str:
-    """Collapse formatting differences so only the actual statement is compared."""
+    """Tidy a statement for display in an error message."""
     return re.sub(r"\s+", " ", sql).strip().rstrip(";")
+
+
+def tokens(sql: str) -> tuple[str, ...]:
+    """Reduce a statement to its token stream.
+
+    Comparing tokens rather than text is what makes this check meaningful. Room's generated
+    createSql is spaced idiosyncratically — a space before the comma separating foreign keys, none
+    before the closing parenthesis — and matching that byte for byte would mean rejecting a
+    perfectly correct migration. Every token here is either a quoted identifier, a keyword or a
+    punctuation mark that delimits itself, so two statements with the same token stream parse to
+    exactly the same thing, while any real difference (a dropped NOT NULL, a changed delete rule,
+    a missing column) changes the tokens.
+    """
+    return tuple(t.upper() if not t.startswith("`") else t for t in TOKEN.findall(sql.rstrip().rstrip(";")))
 
 
 def extract_statements(migration_src: str) -> list[str]:
@@ -64,7 +81,7 @@ def extract_statements(migration_src: str) -> list[str]:
     for match in re.finditer(r'execSQL\(\s*"((?:[^"\\]|\\.)*)"\s*\)', migration_src):
         statements.append(match.group(1))
 
-    return [normalise(s) for s in statements if s.strip()]
+    return [s for s in statements if s.strip()]
 
 
 def load_schema(schema_dir: pathlib.Path, version: int, required: bool = True) -> dict | None:
@@ -93,13 +110,15 @@ def main() -> int:
 
     migration_src = migration_file.read_text()
     statements = extract_statements(migration_src)
+    token_index = {tokens(s): s for s in statements}
     if not statements:
         raise SystemExit(f"Found no execSQL statements in {migration_file}")
 
     problems: list[str] = []
 
     # ---- 1. The migration must not touch anything that already holds data.
-    for statement in statements:
+    for raw in statements:
+        statement = normalise(raw)
         if DESTRUCTIVE.search(statement):
             problems.append(f"destructive statement in migration: {statement[:120]}")
         for _, table in enumerate(TABLE_POSITIONS.findall(statement)):
@@ -138,21 +157,24 @@ def main() -> int:
         if table not in added:
             continue
 
-        expected = normalise(entity["createSql"].replace("${TABLE_NAME}", table))
-        if expected not in statements:
-            close = [s for s in statements if table in s and s.upper().startswith("CREATE TABLE")]
+        expected = entity["createSql"].replace("${TABLE_NAME}", table)
+        if tokens(expected) not in token_index:
+            close = [
+                normalise(s) for s in statements
+                if f"`{table}`" in s and s.strip().upper().startswith("CREATE TABLE")
+            ]
             problems.append(
                 f"\n  table '{table}' is not created the way Room expects."
-                f"\n    Room expects: {expected}"
+                f"\n    Room expects:  {normalise(expected)}"
                 f"\n    migration has: {close[0] if close else '(no CREATE TABLE for this table)'}"
             )
 
         for index in entity.get("indices", []):
-            expected_index = normalise(index["createSql"].replace("${TABLE_NAME}", table))
-            if expected_index not in statements:
+            expected_index = index["createSql"].replace("${TABLE_NAME}", table)
+            if tokens(expected_index) not in token_index:
                 problems.append(
                     f"\n  index '{index['name']}' on '{table}' is missing or differs."
-                    f"\n    Room expects: {expected_index}"
+                    f"\n    Room expects: {normalise(expected_index)}"
                 )
 
     if problems:
