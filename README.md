@@ -1,6 +1,6 @@
 # Rishaan OS
 
-**Version:** 0.1.1  
+**Version:** 0.1.2  
 **Platform:** Android (API 26+)
 
 Rishaan OS is an Android-first personal operating system — an external OS for your life. It helps you answer five fundamental questions:
@@ -37,17 +37,24 @@ app/src/main/java/com/rishaanlabs/ros/
 │   ├── local/
 │   │   ├── dao/          # Room DAO interfaces
 │   │   ├── entity/       # Room entity data classes
+│   │   ├── migration/    # Room migrations (never destructive)
+│   │   ├── model/        # Query projections
 │   │   ├── Converters.kt # TypeConverters for Room
 │   │   └── RosDatabase.kt
 │   └── repository/       # Data access layer (used by ViewModels)
 ├── di/
 │   └── DatabaseModule.kt # Hilt database injection
+├── domain/
+│   ├── attention/        # Needs Attention rules (pure, unit-tested)
+│   └── finance/          # Money and financial projections (pure, unit-tested)
 ├── navigation/
 │   └── Screen.kt         # Navigation route definitions
 ├── ui/
+│   ├── components/       # Shared Compose building blocks
 │   ├── screen/
 │   │   ├── capture/      # Quick Capture sheet
 │   │   ├── daily/        # Daily Review
+│   │   ├── finance/      # Finance: overview, accounts, plan, goals, activity, debt
 │   │   ├── home/         # Today/Home screen
 │   │   ├── inbox/        # Inbox
 │   │   ├── notes/        # Notes CRUD
@@ -62,6 +69,41 @@ app/src/main/java/com/rishaanlabs/ros/
 ├── MainActivity.kt
 └── RosApplication.kt     # Hilt application + WorkManager init
 ```
+
+---
+
+## What's New in V0.1.2 — Finance
+
+A Finance module, reached from **More → Finance**. The bottom navigation is unchanged.
+
+**Accounts** for bank, cash, savings and wallet, with balances calculated from what you record
+rather than typed in and left to drift. Income, expenses and same-currency transfers.
+
+**A monthly plan.** Expense categories split into essential and non-essential, with editable
+monthly limits and a comparison against last month.
+
+**Savings goals** — emergency, medical, travel, study or your own. Money allocated to a goal is
+earmarked, not spent, so setting money aside never looks like an expense. Goals show progress,
+what you need to save monthly to hit a target date, a projected completion date, and how many
+months your emergency fund would cover.
+
+**Loans**, broken into principal, interest and fees, with payoff projections, a what-if for extra
+payments showing the interest it would save, and both avalanche and snowball ordering.
+
+Amounts are stored as whole minor units — MVR 1,234.56 is held as 123456 laari — so no balance is
+ever the result of floating-point arithmetic.
+
+### Upgrading from V0.1.1
+
+**This is the first release that changes the database**, moving it from version 1 to version 2 to
+add the finance tables. The migration only creates new tables; it does not touch Inbox, Projects,
+Tasks, Waiting, Notes or Daily Review, so your data comes across untouched.
+
+Every build now checks that migration against the schema Room expects, and refuses to build if the
+two disagree or if a migration would touch a table that already holds your data.
+
+**Do not uninstall V0.1.1 first.** Install straight over the top — Android should offer *Update*.
+`docs/test-checklist-v0.1.2-finance.md` starts with the upgrade test; do that before anything else.
 
 ---
 
@@ -133,11 +175,11 @@ GitHub always hands out Actions artifacts as a ZIP, so there is one extra step:
 7. Open your **Files** app (on Samsung it is called **My Files**) and go to **Downloads**.
 8. Tap **rishaan-os-debug.zip**.
 9. Choose **Extract** (some file managers say *Unzip* or *Extract all*).
-10. Inside you will find **Rishaan-OS-v0.1.1-debug.apk**.
+10. Inside you will find **Rishaan-OS-v0.1.2-debug.apk**.
 
 ### 3. Install it
 
-11. Tap **Rishaan-OS-v0.1.1-debug.apk**.
+11. Tap **Rishaan-OS-v0.1.2-debug.apk**.
 12. Android will warn that this app came from outside the Play Store. Tap **Settings** on that
     prompt, then turn on **Allow from this source**, then tap **Back**. You only have to do
     this once per app (your browser or your file manager).
@@ -170,9 +212,9 @@ that case uninstall Rishaan OS first, accepting that its data is lost.
 Downloading a ZIP and extracting it is fiddly on a phone. There is a second, easier route:
 
 1. Repository → **Actions** → **Publish Test Release APK** → **Run workflow**, enter a version
-   such as `0.1.1`, and run it.
+   such as `0.1.2`, and run it.
 2. When it finishes, go to the repository home page → **Releases**.
-3. Tap **Rishaan OS v0.1.1 (test build)** and tap the `.apk` file under **Assets**.
+3. Tap **Rishaan OS v0.1.2 (test build)** and tap the `.apk` file under **Assets**.
 4. It downloads as an APK directly — no ZIP, no extracting. Continue from step 11 above.
 
 That workflow only ever runs when you trigger it by hand, and every build it publishes is
