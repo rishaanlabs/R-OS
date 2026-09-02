@@ -72,6 +72,40 @@ processing anyway. Revisit if a migration is needed for other reasons.
 
 ---
 
+## Finance capture — the one place classification happens at entry
+
+**Decision.** Finance Quick Capture resolves fully at entry. `Coffee 45` writes a real expense
+against a real account and category; it never lands in the Inbox as an unresolved amount. This
+is a deliberate exception to *capture first, classify later*, and the only one.
+
+**Why the principle does not apply here.** That principle protects a thought whose shape is not
+yet known — the user does not yet understand what they captured, so making them classify it
+costs the capture. A spend is the opposite: it has already happened, the amount is known, and
+the account it came from is known at the moment it is typed. There is no understanding still to
+arrive. Deferring it does not protect anything; it just means the same two facts get supplied
+later, from memory, with less certainty than the user had at the till.
+
+**Why it is not merely convenient.** A half-formed money object is worse than a half-formed
+thought. An unclassified inbox item is a note that reads oddly until processed. An unclassified
+expense is a balance that is silently wrong — the account it came out of has not moved, so every
+figure downstream (this month versus last, category limits, runway) is quoting a number that
+does not match reality. Finance is the one area where an unprocessed item corrupts the answers
+other screens are giving.
+
+**Consequence — resolution must not read as a form.** Fast is still the requirement; the
+exception buys correctness, not the right to be slow. `Coffee 45` should parse to amount 45 with
+"Coffee" matched against existing categories and recent descriptions, leaving account and
+category as two taps against sensible defaults, not an empty transaction screen. If capture ever
+degrades into filling in fields, the exception has failed and is worth revisiting — but the fix
+is a better resolution step, not an unresolved expense.
+
+**Consequence — no schema debt.** Because it resolves at entry, it writes only to the finance
+tables V0.1.2 already created. Parking an unresolved amount would need an amount column on
+`inbox_items` — a migration. The product argument and the schema argument reach the same place,
+which is why this is settled rather than provisional.
+
+---
+
 ## Inbox — process, do not browse
 
 **Decision.** The Inbox opens in Process mode: one item, one question, straight to the next.
