@@ -15,12 +15,26 @@ import com.rishaanlabs.ros.data.local.entity.LoanPayment
 import com.rishaanlabs.ros.data.local.entity.SavingsGoal
 import com.rishaanlabs.ros.data.local.entity.SavingsGoalType
 import com.rishaanlabs.ros.data.local.entity.defaultFinanceCategories
+import com.rishaanlabs.ros.domain.finance.DeletionVerdict
+import com.rishaanlabs.ros.domain.finance.accountCurrencyChangeVerdict
+import com.rishaanlabs.ros.domain.finance.accountDeletionVerdict
+import com.rishaanlabs.ros.domain.finance.goalCurrencyChangeVerdict
+import com.rishaanlabs.ros.domain.finance.goalDeletionVerdict
+import com.rishaanlabs.ros.domain.finance.loanDeletionVerdict
+import com.rishaanlabs.ros.domain.finance.transactionDeletionVerdict
+import com.rishaanlabs.ros.domain.finance.transactionEditVerdict
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Raised when an edit or a delete would leave the finance data inconsistent. The message is
+ * written for the user, because it is shown to them directly.
+ */
+class FinanceIntegrityException(message: String) : IllegalStateException(message)
 
 @Singleton
 class FinanceRepository @Inject constructor(
@@ -245,5 +259,192 @@ class FinanceRepository @Inject constructor(
                 )
             )
         }
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Corrections.
+    //
+    // Everything below exists because a finance record entered wrongly used to be permanent: the
+    // only way to remove a mistyped savings goal was to clear the app's data, which would have
+    // taken every project, task and note with it. Editing and deleting rows needs no schema
+    // change — the tables were always capable of it, nothing was ever wired up.
+    // ---------------------------------------------------------------------------------------
+
+    /** Reads the counts a delete depends on, so the UI can warn before asking to confirm. */
+    suspend fun verdictForDeletingAccount(account: FinanceAccount): DeletionVerdict =
+        accountDeletionVerdict(dao.countTransactionsForAccount(account.id))
+
+    suspend fun verdictForDeletingGoal(goal: SavingsGoal): DeletionVerdict =
+        goalDeletionVerdict(dao.countAllocationsForGoal(goal.id))
+
+    suspend fun verdictForDeletingLoan(loan: Loan): DeletionVerdict =
+        loanDeletionVerdict(dao.countPaymentsForLoan(loan.id))
+
+    suspend fun verdictForDeletingTransaction(transaction: FinanceTransaction): DeletionVerdict =
+        transactionDeletionVerdict(dao.getLoanPaymentByTransactionId(transaction.id) != null)
+
+    suspend fun updateAccount(
+        account: FinanceAccount,
+        name: String,
+        institution: String,
+        type: FinanceAccountType,
+        currency: String,
+        openingBalanceMinor: Long
+    ) {
+        require(name.isNotBlank()) { "Account name is required." }
+        val normalisedCurrency = currency.trim().uppercase().ifBlank { account.currency }
+        val currencyChanged = !normalisedCurrency.equals(account.currency, ignoreCase = true)
+        accountCurrencyChangeVerdict(dao.countTransactionsForAccount(account.id), currencyChanged)
+            .orThrow()
+        dao.updateAccount(
+            account.copy(
+                name = name.trim(),
+                institution = institution.trim(),
+                type = type,
+                currency = normalisedCurrency,
+                openingBalanceMinor = openingBalanceMinor
+            )
+        )
+    }
+
+    suspend fun deleteAccount(account: FinanceAccount) {
+        verdictForDeletingAccount(account).orThrow()
+        dao.deleteAccountById(account.id)
+    }
+
+    suspend fun updateTransaction(
+        transaction: FinanceTransaction,
+        type: FinanceTransactionType,
+        amountMinor: Long,
+        accountId: String,
+        destinationAccountId: String? = null,
+        categoryId: String? = null,
+        merchant: String = "",
+        note: String = "",
+        occurredAt: LocalDateTime = transaction.occurredAt
+    ) {
+        transactionEditVerdict(dao.getLoanPaymentByTransactionId(transaction.id) != null).orThrow()
+        require(amountMinor > 0L) { "Amount must be greater than zero." }
+        val source = requireNotNull(dao.getAccountById(accountId)) { "Account not found." }
+        val destination = destinationAccountId?.let {
+            requireNotNull(dao.getAccountById(it)) { "Destination account not found." }
+        }
+
+        if (type == FinanceTransactionType.TRANSFER) {
+            require(destination != null) { "A transfer needs a destination account." }
+            require(destination.id != source.id) { "Transfer accounts must be different." }
+            require(destination.currency.equals(source.currency, ignoreCase = true)) {
+                "Cross-currency transfers are not supported in this Finance version."
+            }
+        } else {
+            require(destination == null) { "Destination account is only valid for transfers." }
+        }
+
+        dao.updateTransaction(
+            transaction.copy(
+                type = type,
+                amountMinor = amountMinor,
+                currency = source.currency,
+                accountId = source.id,
+                destinationAccountId = destination?.id,
+                categoryId = if (type == FinanceTransactionType.EXPENSE) categoryId else null,
+                merchant = merchant.trim(),
+                note = note.trim(),
+                occurredAt = occurredAt
+            )
+        )
+    }
+
+    /**
+     * Removes a transaction, taking its loan payment with it when there is one. Both rows are
+     * written together by [recordLoanPayment], so they are removed together too — otherwise the
+     * loan would still count principal the account never paid.
+     */
+    suspend fun deleteTransaction(transaction: FinanceTransaction) {
+        database.withTransaction {
+            dao.getLoanPaymentByTransactionId(transaction.id)?.let { dao.deleteLoanPaymentById(it.id) }
+            dao.deleteTransactionById(transaction.id)
+        }
+    }
+
+    suspend fun updateGoal(
+        goal: SavingsGoal,
+        name: String,
+        type: SavingsGoalType,
+        targetMinor: Long,
+        currency: String,
+        targetDate: LocalDate?,
+        monthlyPlannedMinor: Long
+    ) {
+        require(name.isNotBlank()) { "Goal name is required." }
+        require(targetMinor > 0L) { "Goal target must be greater than zero." }
+        require(monthlyPlannedMinor >= 0L) { "Monthly contribution cannot be negative." }
+        val normalisedCurrency = currency.trim().uppercase().ifBlank { goal.currency }
+        val currencyChanged = !normalisedCurrency.equals(goal.currency, ignoreCase = true)
+        goalCurrencyChangeVerdict(dao.countAllocationsForGoal(goal.id), currencyChanged).orThrow()
+        dao.updateGoal(
+            goal.copy(
+                name = name.trim(),
+                type = type,
+                targetMinor = targetMinor,
+                currency = normalisedCurrency,
+                targetDate = targetDate,
+                monthlyPlannedMinor = monthlyPlannedMinor
+            )
+        )
+    }
+
+    suspend fun deleteGoal(goal: SavingsGoal) {
+        verdictForDeletingGoal(goal).orThrow()
+        dao.deleteGoalById(goal.id)
+    }
+
+    suspend fun updateLoan(
+        loan: Loan,
+        name: String,
+        lender: String,
+        currency: String,
+        originalPrincipalMinor: Long,
+        trackingStartPrincipalMinor: Long,
+        annualInterestRateBps: Int,
+        minimumPaymentMinor: Long,
+        interestMethod: LoanInterestMethod
+    ) {
+        require(name.isNotBlank()) { "Loan name is required." }
+        require(originalPrincipalMinor > 0L) { "Original principal must be greater than zero." }
+        require(trackingStartPrincipalMinor >= 0L && trackingStartPrincipalMinor <= originalPrincipalMinor) {
+            "Current tracked principal must be between zero and original principal."
+        }
+        require(annualInterestRateBps >= 0) { "Interest rate cannot be negative." }
+        require(minimumPaymentMinor > 0L) { "Payment must be greater than zero." }
+        val normalisedCurrency = currency.trim().uppercase().ifBlank { loan.currency }
+        val currencyChanged = !normalisedCurrency.equals(loan.currency, ignoreCase = true)
+        if (currencyChanged && dao.countPaymentsForLoan(loan.id) > 0) {
+            throw FinanceIntegrityException(
+                "This loan already has payments recorded in its current currency. " +
+                    "Remove them before changing it."
+            )
+        }
+        dao.updateLoan(
+            loan.copy(
+                name = name.trim(),
+                lender = lender.trim(),
+                currency = normalisedCurrency,
+                originalPrincipalMinor = originalPrincipalMinor,
+                trackingStartPrincipalMinor = trackingStartPrincipalMinor,
+                annualInterestRateBps = annualInterestRateBps,
+                minimumPaymentMinor = minimumPaymentMinor,
+                interestMethod = interestMethod
+            )
+        )
+    }
+
+    suspend fun deleteLoan(loan: Loan) {
+        verdictForDeletingLoan(loan).orThrow()
+        dao.deleteLoanById(loan.id)
+    }
+
+    private fun DeletionVerdict.orThrow() {
+        if (this is DeletionVerdict.Blocked) throw FinanceIntegrityException(reason)
     }
 }

@@ -45,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rishaanlabs.ros.data.local.entity.InboxItem
 import com.rishaanlabs.ros.data.local.entity.Project
 import com.rishaanlabs.ros.data.local.entity.TaskPriority
+import com.rishaanlabs.ros.domain.capture.CapturedText
 import com.rishaanlabs.ros.ui.components.MetadataChip
 import com.rishaanlabs.ros.ui.components.SectionHeader
 import java.time.LocalDate
@@ -109,17 +110,19 @@ fun InboxScreen(
 
                 mode == InboxMode.PROCESS && state.current != null -> ProcessMode(
                     item = state.current!!,
+                    parsed = viewModel.preview(state.current!!),
                     remaining = state.remaining,
                     total = state.all.size,
                     projects = state.projects,
-                    onProcess = { item, destination, projectId, date, priority, person ->
+                    onProcess = { item, destination, projectId, date, priority, person, title ->
                         viewModel.process(
                             item = item,
                             destination = destination,
                             projectId = projectId,
                             date = date,
                             priority = priority,
-                            person = person
+                            person = person,
+                            titleOverride = title
                         )
                     },
                     onDelete = { viewModel.delete(state.current!!) }
@@ -148,10 +151,11 @@ fun InboxScreen(
 @Composable
 private fun ProcessMode(
     item: InboxItem,
+    parsed: CapturedText,
     remaining: Int,
     total: Int,
     projects: List<Project>,
-    onProcess: (InboxItem, ProcessDestination, String?, LocalDate?, TaskPriority, String) -> Unit,
+    onProcess: (InboxItem, ProcessDestination, String?, LocalDate?, TaskPriority, String, String) -> Unit,
     onDelete: () -> Unit
 ) {
     // Keyed on the item so each new item starts from a clean slate rather than inheriting the
@@ -161,6 +165,7 @@ private fun ProcessMode(
     var date by remember(item.id) { mutableStateOf<LocalDate?>(null) }
     var priority by remember(item.id) { mutableStateOf(TaskPriority.NONE) }
     var person by remember(item.id) { mutableStateOf("") }
+    var title by remember(item.id) { mutableStateOf(parsed.proposedTitle) }
 
     Column(
         modifier = Modifier
@@ -212,6 +217,54 @@ private fun ProcessMode(
         }
 
         if (destination != null) {
+            // A multi-line capture carries structure the user typed. Show the title that will
+            // actually be used, so a shopping list cannot silently become one giant heading, and
+            // say plainly where the rest of the text is going.
+            if (parsed.bodyWhenRetitled.isNotBlank()) {
+                SectionHeader(title = "Title")
+                if (parsed.titleNeedsConfirmation) {
+                    Text(
+                        text = "This reads as a list rather than a heading, so the first line is " +
+                            "only a guess. Name it and every line stays in the notes.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
+                }
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    singleLine = true,
+                    isError = title.isBlank(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+                parsed.suggestedAlternativeTitle?.let { suggestion ->
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = title == suggestion,
+                            onClick = { title = suggestion },
+                            label = { Text(suggestion) }
+                        )
+                    }
+                }
+                // Shows the actual outcome: keeping the proposed title consumes the first line,
+                // replacing it keeps that line as an item.
+                val keptBody = parsed.bodyFor(title)
+                if (keptBody.isNotBlank()) {
+                    Text(
+                        text = "Notes will keep:\n$keptBody",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
             if (destination == ProcessDestination.WAITING) {
                 OutlinedTextField(
                     value = person,
@@ -277,9 +330,9 @@ private fun ProcessMode(
             TextButton(onClick = onDelete) { Text("Discard") }
             Button(
                 onClick = {
-                    destination?.let { onProcess(item, it, projectId, date, priority, person) }
+                    destination?.let { onProcess(item, it, projectId, date, priority, person, title) }
                 },
-                enabled = destination != null
+                enabled = destination != null && title.isNotBlank()
             ) { Text("Process") }
         }
     }

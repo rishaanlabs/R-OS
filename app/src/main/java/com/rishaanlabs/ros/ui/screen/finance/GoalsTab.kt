@@ -2,6 +2,7 @@ package com.rishaanlabs.ros.ui.screen.finance
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +12,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,7 +27,8 @@ import com.rishaanlabs.ros.domain.finance.formatMoney
 fun GoalsTab(
     state: FinanceUiState,
     contentPadding: PaddingValues,
-    onAllocate: (String, String, String?, String) -> Unit
+    onAllocate: (String, String, String?, String) -> Unit,
+    onOpen: (FinanceTarget) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(
@@ -35,7 +38,17 @@ fun GoalsTab(
         ),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { Text("Savings funds", style = MaterialTheme.typography.headlineSmall) }
+        item {
+            Text("Savings funds", style = MaterialTheme.typography.headlineSmall)
+        }
+        item {
+            Text(
+                "Money set aside here still sits in your accounts. Use Edit to change a target " +
+                    "or remove a goal, and a negative amount to release money back.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (state.goals.isEmpty()) item { Text("Create Emergency, Medical, Travel, Study or any custom goal.") }
         items(state.goals.size) { index ->
             val row = state.goals[index]
@@ -64,19 +77,24 @@ fun GoalsTab(
                 OutlinedTextField(
                     value = allocation,
                     onValueChange = { allocation = it },
-                    label = { Text("Add to goal") },
+                    label = { Text("Add to goal (negative releases)") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(16.dp, 12.dp, 16.dp, 8.dp)
                 )
-                Button(
-                    onClick = {
-                        if (allocation.isNotBlank()) {
-                            onAllocate(row.goal.id, allocation, null, "Manual allocation")
-                            allocation = ""
+                Row(
+                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (allocation.isNotBlank()) {
+                                onAllocate(row.goal.id, allocation, null, "Manual allocation")
+                                allocation = ""
+                            }
                         }
-                    },
-                    modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 16.dp)
-                ) { Text("Allocate") }
+                    ) { Text("Allocate") }
+                    TextButton(onClick = { onOpen(FinanceTarget.Goal(row.goal)) }) { Text("Edit") }
+                }
             }
         }
     }

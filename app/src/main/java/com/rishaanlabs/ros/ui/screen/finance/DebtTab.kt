@@ -2,6 +2,7 @@ package com.rishaanlabs.ros.ui.screen.finance
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,11 +11,13 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.rishaanlabs.ros.data.local.entity.LoanInterestMethod
@@ -27,7 +30,8 @@ import com.rishaanlabs.ros.domain.finance.parseMajorToMinor
 fun DebtTab(
     state: FinanceUiState,
     contentPadding: PaddingValues,
-    onRecordPayment: (String, String, String, String, String, String, String) -> Unit
+    onRecordPayment: (String, String, String, String, String, String, String) -> Unit,
+    onOpen: (FinanceTarget) -> Unit
 ) {
     val active = state.loans.filter { it.loan.status == LoanStatus.ACTIVE && it.currentPrincipalMinor > 0L }
     val avalanche = active.maxWithOrNull(compareBy<com.rishaanlabs.ros.data.local.model.LoanProgressRow> { it.loan.annualInterestRateBps }.thenBy { -it.currentPrincipalMinor })
@@ -76,7 +80,14 @@ fun DebtTab(
             var principal by remember(row.loan.id) { mutableStateOf("") }
             var interest by remember(row.loan.id) { mutableStateOf("") }
             Card(Modifier.fillMaxWidth()) {
-                Text(row.loan.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp, 14.dp, 16.dp, 2.dp))
+                Row(
+                    Modifier.fillMaxWidth().padding(end = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(row.loan.name, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(16.dp, 14.dp, 0.dp, 2.dp))
+                    TextButton(onClick = { onOpen(FinanceTarget.LoanRecord(row.loan)) }) { Text("Edit") }
+                }
                 Text(row.loan.lender, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))
                 Text("Balance ${formatMoney(row.currentPrincipalMinor, row.loan.currency)}", modifier = Modifier.padding(16.dp, 8.dp, 16.dp, 0.dp))
                 Text("Interest paid since tracking ${formatMoney(row.interestPaidMinor, row.loan.currency)}", modifier = Modifier.padding(horizontal = 16.dp))
