@@ -19,6 +19,11 @@ jobs:
   build:
     name: Build Debug APK
     runs-on: ubuntu-latest
+    env:
+      # Bump these together with the database version when a new migration is written.
+      MIGRATION_FILE: app/src/main/java/com/rishaanlabs/ros/data/local/migration/FinanceMigration.kt
+      FROM_VERSION: "1"
+      TO_VERSION: "2"
     permissions:
       contents: read
 
@@ -45,6 +50,11 @@ jobs:
           set -o pipefail
           ./gradlew test assembleDebug --no-daemon 2>&1 | tee build.log
 
+      # The checker is the only thing between a wrong migration and an app that dies on launch
+      # against real data, so it is itself tested before it is trusted.
+      - name: Test the migration checker
+        run: python3 scripts/test_verify_room_migration.py
+
       # Room only checks a migration against the entities when the app opens an existing database
       # on a real device — by which point a mismatch is a crash on the user's data. The build has
       # just exported the schema Room expects, so compare the migration against it here instead.
@@ -52,8 +62,40 @@ jobs:
         run: |
           python3 scripts/verify_room_migration.py \
             app/schemas \
-            app/src/main/java/com/rishaanlabs/ros/data/local/migration/FinanceMigration.kt \
-            1 2
+            "$MIGRATION_FILE" \
+            "$FROM_VERSION" "$TO_VERSION"
+
+      # TEMPORARY (remove once app/schemas is committed): print the exported schema so the first
+      # copy can be taken from the log. There is no Android SDK outside CI to generate it.
+      - name: Print exported schema for bootstrap
+        run: |
+          for f in $(find app/schemas -name '*.json' | sort); do
+            echo "===BEGIN $f==="
+            python3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1])), indent=1, sort_keys=False))" "$f"
+            echo "===END $f==="
+          done
+
+      # The exported schema is committed so later migrations can be checked against it. If the
+      # build just produced something different, the entities changed and the schema was not
+      # committed with them — which is how the next migration ends up unverifiable.
+      - name: Check the committed schema matches the build
+        run: |
+          if [ -n "$(git status --porcelain app/schemas)" ]; then
+            echo "::error::app/schemas is out of date. Commit what the build exported."
+            git status --porcelain app/schemas
+            git --no-pager diff -- app/schemas | head -80
+            exit 1
+          fi
+          echo "Committed schema matches the build."
+
+      # Kept for retrieving a newly exported schema when adding a version.
+      - name: Upload exported Room schema
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas
+          path: app/schemas
+          if-no-files-found: warn
 
       - name: Summarise build errors
         if: failure()
