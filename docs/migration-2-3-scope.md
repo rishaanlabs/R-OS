@@ -5,9 +5,9 @@ whether a transaction has been reviewed, and a record of what happened to a thin
 together because the migration is the expensive, risky part and the features are not — three
 migrations to reach the same schema is three upgrade tests on a database holding real money.
 
-**Status: not started.** The V0.1.2 gate is closed (1 → 2 proved on a real phone, lived with for a
-fortnight), so writing this one is now allowed. It should not begin until the tooling changes in
-§1 are done, for the reason given there.
+**Status: the tooling in §1 is done; the migration itself is not started.** The V0.1.2 gate is
+closed (1 → 2 proved on a real phone, lived with for a fortnight), and the checker can now express
+and verify every change this migration needs. Steps 4–7 of §6 are what remains.
 
 ---
 
@@ -213,16 +213,22 @@ unfinished would trade a cheap risk now for an expensive one later.
 
 | # | Step | Why it is here |
 |---|---|---|
-| 1 | Commit `app/schemas/`, un-ignore it, add `2.json` | Nothing after this can be verified without it |
-| 2 | Narrow `ALTER TABLE` to permit `ADD COLUMN`; verify added columns; derive protected tables from the from-version schema; parameterise the CI step | §1b–1d, all in `verify_room_migration.py` |
-| 3 | Mutation-test the checker against a deliberately wrong `ADD COLUMN` | The 1 → 2 checker was mutation-tested before being trusted; this one should be too |
+| 1 | ~~Commit `app/schemas/`, un-ignore it, add `2.json`~~ **done** | Nothing after this can be verified without it |
+| 2 | ~~Narrow `ALTER TABLE` to permit `ADD COLUMN`; verify added columns; derive protected tables from the from-version schema; parameterise the CI step~~ **done** | §1b–1d, all in `verify_room_migration.py` |
+| 3 | ~~Mutation-test the checker~~ **done** — 16 cases in `scripts/test_verify_room_migration.py`, run in CI ahead of the check they protect | The 1 → 2 checker was mutation-tested before being trusted; this one should be too |
 | 4 | Write the three entities and bump `RosDatabase` to 3 | Room then exports `3.json` |
 | 5 | Write `MIGRATION_2_3` against that exported schema | |
 | 6 | Wire DAOs and repositories; leave the activity write path for its own change | |
 | 7 | Upgrade test on the phone, over real data | The 1 → 2 rule stands: CI proves a migration against the schema, not against the database it will run on |
 
-Steps 1–3 are the ones that will be tempting to skip. Skipping them means the migration cannot be
-checked, which is the position 1 → 2 deliberately engineered its way out of.
+Steps 1–3 are done. When step 4 bumps the version, Room will export `3.json` and stop exporting
+`2.json`; the committed copy is what the checker reads for the from-version side, and CI fails if
+the committed schema and the build ever disagree.
+
+One practical note for step 4, learned doing step 1: the exported schema exists only where an
+Android build runs. `scripts/verify_room_migration.py` can be run locally against the committed
+`app/schemas` without an SDK, but obtaining `3.json` in the first place needs a build — CI
+uploads `app/schemas` as an artifact on every run for exactly that.
 
 ## 7. Test plan
 

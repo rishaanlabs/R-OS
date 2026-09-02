@@ -65,18 +65,6 @@ jobs:
             "$MIGRATION_FILE" \
             "$FROM_VERSION" "$TO_VERSION"
 
-      # TEMPORARY (remove once app/schemas is committed): print the exported schema so the first
-      # copy can be taken from the log. There is no Android SDK outside CI to generate it.
-      - name: Print exported schema for bootstrap
-        run: |
-          # base64 so the committed copy is byte-for-byte what Room wrote. Reformatting it here
-          # would leave the committed file permanently unequal to the build's own output.
-          for f in $(find app/schemas -name '*.json' | sort); do
-            echo "===BEGIN $f==="
-            base64 -w 200 "$f"
-            echo "===END $f==="
-          done
-
       # The exported schema is committed so later migrations can be checked against it. If the
       # build just produced something different, the entities changed and the schema was not
       # committed with them — which is how the next migration ends up unverifiable.
