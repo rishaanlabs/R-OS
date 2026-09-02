@@ -69,9 +69,11 @@ jobs:
       # copy can be taken from the log. There is no Android SDK outside CI to generate it.
       - name: Print exported schema for bootstrap
         run: |
+          # base64 so the committed copy is byte-for-byte what Room wrote. Reformatting it here
+          # would leave the committed file permanently unequal to the build's own output.
           for f in $(find app/schemas -name '*.json' | sort); do
             echo "===BEGIN $f==="
-            python3 -c "import json,sys; print(json.dumps(json.load(open(sys.argv[1])), indent=1, sort_keys=False))" "$f"
+            base64 -w 200 "$f"
             echo "===END $f==="
           done
 
