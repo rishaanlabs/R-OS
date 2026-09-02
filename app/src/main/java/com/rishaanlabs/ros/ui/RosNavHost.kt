@@ -13,6 +13,7 @@ import androidx.navigation.compose.*
 import com.rishaanlabs.ros.navigation.Screen
 import com.rishaanlabs.ros.ui.screen.capture.CaptureSheet
 import com.rishaanlabs.ros.ui.screen.home.HomeScreen
+import com.rishaanlabs.ros.ui.screen.finance.FinanceScreen
 import com.rishaanlabs.ros.ui.screen.inbox.InboxScreen
 import com.rishaanlabs.ros.ui.screen.notes.NoteDetailScreen
 import com.rishaanlabs.ros.ui.screen.notes.NotesScreen
@@ -120,9 +121,13 @@ fun RosNavHost() {
                     onNavigateToInbox = { navController.navigate(Screen.Inbox.route) },
                     onNavigateToNotes = { navController.navigate(Screen.Notes.route) },
                     onNavigateToWaiting = { navController.navigate(Screen.WaitingList.route) },
+                    onNavigateToFinance = { navController.navigate(Screen.Finance.route) },
                     onNavigateToSearch = { navController.navigate(Screen.Search.route) },
                     onNavigateToDailyReview = { navController.navigate(Screen.DailyReview.route) }
                 )
+            }
+            composable(Screen.Finance.route) {
+                FinanceScreen(onBack = { navController.popBackStack() })
             }
             composable(Screen.Inbox.route) {
                 InboxScreen(

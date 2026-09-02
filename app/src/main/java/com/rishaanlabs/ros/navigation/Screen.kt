@@ -14,6 +14,7 @@ sealed class Screen(val route: String) {
 
     // Inbox
     object Inbox : Screen("inbox")
+    object Finance : Screen("finance")
 
     // Detail screens
     object ProjectDetail : Screen("project/{projectId}") {

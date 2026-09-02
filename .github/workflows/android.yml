@@ -45,6 +45,16 @@ jobs:
           set -o pipefail
           ./gradlew test assembleDebug --no-daemon 2>&1 | tee build.log
 
+      # Room only checks a migration against the entities when the app opens an existing database
+      # on a real device — by which point a mismatch is a crash on the user's data. The build has
+      # just exported the schema Room expects, so compare the migration against it here instead.
+      - name: Verify the Room migration matches the exported schema
+        run: |
+          python3 scripts/verify_room_migration.py \
+            app/schemas \
+            app/src/main/java/com/rishaanlabs/ros/data/local/migration/FinanceMigration.kt \
+            1 2
+
       - name: Summarise build errors
         if: failure()
         run: |

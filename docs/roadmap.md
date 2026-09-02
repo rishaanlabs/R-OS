@@ -16,7 +16,7 @@ Core personal management system for daily use.
 - [x] Global Search
 - [x] Dark mode
 
-## V0.1.1 — Core UX (current)
+## V0.1.1 — Core UX (shipped)
 
 Nothing new to store; the same information, presented so it can be acted on.
 
@@ -43,6 +43,27 @@ Nothing new to store; the same information, presented so it can be acted on.
       and design; a half-version would have meant migrating a database holding real data.
 - [ ] **Plan My Day: durations, capacity, timeboxing** — deliberately out of scope. These need a
       stronger model than V0.1.1 has, and a weak version would make the feature worse.
+
+## V0.1.2 — Finance (current)
+
+- [x] Bank, cash, savings and wallet accounts with calculated balances
+- [x] Income, expenses and same-currency transfers
+- [x] Expense categories, essential/non-essential split, editable monthly limits
+- [x] This month versus last month
+- [x] Savings goals with virtual allocation, so earmarking is not spending
+- [x] Required monthly saving, projected completion, emergency-fund runway
+- [x] Loans with principal/interest/fee breakdown and payoff projections
+- [x] Extra-payment what-if with interest saved; avalanche and snowball ordering
+- [x] Money held as integer minor units throughout
+- [x] Room 1 → 2 migration, additive only, verified against the exported schema in CI
+
+### Deferred from V0.1.2
+
+- [ ] Automatic percentage-based income routing (the allocation model is ready for it)
+- [ ] Foreign exchange and multi-currency conversion
+- [ ] Investments
+- [ ] Bank API syncing
+- [ ] Finance entries from Quick Capture
 
 ## V0.2 — Depth
 
