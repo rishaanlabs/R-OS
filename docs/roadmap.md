@@ -135,6 +135,13 @@ Two details that decide the shape of this phase:
 
 ### V0.2B — Life architecture (one migration, after the gate)
 
+The R-OS Mobile design added three more schema-dependent needs — scheduled payments, whether a
+transaction has been reviewed, and activity history. They are scoped together with the tooling
+changes they require in `docs/migration-2-3-scope.md`; that document is the plan for migration
+2 → 3, and it should be read before any of the items below are started, because Areas and Goals
+may want to share the same migration.
+
+
 - [ ] Areas of Life — Finance, Work, Health, Scouts, Personal, Family
 - [ ] Goals — a goal belongs to an area; projects support goals; tasks support projects
 - [ ] Dashboard evolution — today, attention, goals progressing or stalled, financial position,
