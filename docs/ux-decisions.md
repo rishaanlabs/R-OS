@@ -193,6 +193,91 @@ the third time.
 
 ---
 
+## Finance — a record you cannot correct is worse than one you never made
+
+**Decision.** Every finance record can be edited and deleted. Deleting always asks first, and the
+question states what will actually happen rather than warning generically.
+
+**Why.** Finance shipped able to create accounts, transactions, goals and loans and unable to
+change any of them. A savings goal typed with the wrong target was permanent, and the only way
+to remove it was to clear the app's data — which would have taken every project, task, note and
+waiting item with it. That is not a missing convenience; it makes the whole app unsafe to
+experiment with, and a personal system nobody dares put wrong data into is a system nobody puts
+data into.
+
+**Consequence.** Deletion is not uniform, because the data model is not. An account with
+transactions cannot be deleted — the foreign key is NO_ACTION and the database itself would
+refuse — so the app refuses first and offers archiving, which keeps the history and the balances.
+A savings goal deletes freely: its allocations are virtual, so releasing them moves no real money.
+A loan deletes its payment records but never the transactions that paid them, because that money
+genuinely left the account. Deleting a debt payment removes both of its rows, since the loan and
+the account would otherwise disagree about whether it was paid.
+
+**Deliberately not done.** A full reversal and audit model. Releasing money from a goal already
+works by correcting entry — a negative allocation, leaving both entries in the history — and
+transactions delete outright. Making everything work by correcting entry is the better long-term
+answer and needs its own design; a half version would have meant a migration on a database that
+now holds real money.
+
+---
+
+## Finance — the add button adds the thing you are looking at
+
+**Decision.** Each Finance section's add button creates that section's kind of record. The
+four-way picker survives only on Overview, where there is no obvious answer.
+
+**Why.** Every add went through the same picker — on the Accounts tab, the button asked whether
+you meant an account, a transaction, a goal or a loan. That is two extra decisions on top of
+every entry, on the screen used most often and usually in a hurry, and it is why Finance felt
+heavy to operate long before any individual form was at fault.
+
+**Consequence.** Monthly limits moved out of their own tab and next to the spending they
+constrain, and Overview stopped repeating the Savings tab in full — the same goals appeared twice
+at different levels of detail, and neither read as the authoritative one. Six sections became
+five.
+
+---
+
+## Finance — a failed action says so
+
+**Decision.** Validation failures surface as a message. The screen never lets one escape.
+
+**Why.** Every repository call validates with `require`, and an exception thrown inside
+`viewModelScope` reaches the default handler and kills the process. Typing a letter into an
+amount field crashed the app. A financial tool that closes rather than saying "Amount is
+required" cannot be trusted with anything.
+
+---
+
+## Capture — structure the user typed is structure worth keeping
+
+**Decision.** A multi-line capture becomes a title plus a body, for tasks and waiting items as
+well as notes. Where the first line cannot be shown to be a heading, the processor asks instead
+of guessing.
+
+**Why.** Capture takes free text and asks nothing, which is right (see *Capture — capture first,
+classify later*) — but it means a list arrives as one string, and something has to recover its
+shape later. Processing used to put the entire blob into the title, so a shopping list became one
+unreadable heading and the list itself was gone. Only notes split the text; tasks and waiting
+items did not.
+
+**Consequence.** "Shopping / Milk / Eggs / Bread" and "Milk / Eggs / Bread" are not
+distinguishable from the text — the first line is a heading in one and an item in the other, and
+telling them apart needs to understand the words. So the app does not try. It proposes the first
+line, and what the user does with that proposal decides the question: keeping it treats the line
+as a heading and consumes it, replacing it treats the line as an item and keeps it in the list.
+No line is ever lost either way, which is the property the unit tests actually assert.
+
+**Deliberately not done.** Generating titles from a model. A local vocabulary offers "Shopping
+list" when the lines look like groceries, and that is the whole of it — the user sees and can
+overwrite the result, and nothing downstream depends on the guess being right. A confidently
+wrong title is worse than an honest prompt.
+
+**Left open.** Turning one captured list into several tasks. The parse already returns the
+individual lines, so the processor can grow that action without the parsing being redesigned.
+
+---
+
 ## Architecture — one state object per screen
 
 **Decision.** Screens observe a single `stateIn` StateFlow of an immutable UI state. Business

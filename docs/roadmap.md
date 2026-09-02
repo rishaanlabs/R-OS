@@ -44,10 +44,12 @@ Nothing new to store; the same information, presented so it can be acted on.
 - [ ] **Plan My Day: durations, capacity, timeboxing** — deliberately out of scope. These need a
       stronger model than V0.1.1 has, and a weak version would make the feature worse.
 
-## V0.1.2 — Finance (merged, awaiting the on-device upgrade test)
+## V0.1.2 — Finance (stable, real-device migration verified)
 
-Built, merged and green in CI. Not yet declared stable: this is the first release to change
-the database, and that is only proved on a phone holding real data. See the gate under V0.2.
+Upgraded over a V0.1.1 install holding real data through Android's normal Update flow, then used
+daily for about a fortnight: no crash, no migration error, no reset, nothing missing. That closes
+the Room 1 → 2 gate — the migration is proved against a real database, not only against the
+schema Room generates.
 
 - [x] Bank, cash, savings and wallet accounts with calculated balances
 - [x] Income, expenses and same-currency transfers
@@ -68,16 +70,48 @@ the database, and that is only proved on a phone holding real data. See the gate
 - [ ] Bank API syncing
 - [ ] Finance entries from Quick Capture — scheduled into V0.2A
 
+## V0.1.3 — Finance corrections and capture structure (current)
+
+Two weeks of real use found problems that designing the screens had not.
+
+- [x] Every finance record can be corrected: accounts, transactions, savings goals and loans open
+      to an edit form rather than being permanently whatever they were first typed as
+- [x] Every finance record can be deleted, with a confirmation that states the consequence
+- [x] Deletion refuses where it would corrupt data, and says what to do instead — an account
+      with transactions offers archiving rather than a database-level failure
+- [x] Deleting a debt payment removes its loan payment too, so the loan and the account cannot
+      disagree about whether money was paid
+- [x] Validation failures show a message instead of crashing the app — an amount field with a
+      letter in it used to take the process down
+- [x] Finance is five sections rather than six: monthly limits moved beside the spending they
+      constrain, and Overview no longer repeats the Savings tab in full
+- [x] The add button adds what the current tab is about, instead of opening a four-way picker
+      on every tab
+- [x] Multi-line captures keep their structure: "Shopping / Milk / Eggs / Bread" becomes a task
+      titled Shopping with the list in its notes, not one unreadable heading
+- [x] A list with no heading is not silently titled after its first item; the processor asks
+- [x] No schema change — Room stays at version 2
+
+### Deferred from V0.1.3
+
+- [ ] Reversing a transaction rather than deleting it. Releasing money from a goal already works
+      this way (a negative allocation, which leaves both entries in the history); transactions
+      delete outright. A correcting-entry model is the better long-term answer and needs its own
+      design.
+- [ ] Editing a debt payment in place. Its principal and interest split lives on the loan, so
+      correcting one currently means deleting it and recording it again.
+- [ ] Archived accounts have no screen. Archiving is offered as the safe alternative to deleting,
+      but nothing lists what has been archived or restores it.
+
 ## V0.2 — Depth
 
 Split into two phases. V0.2A makes the system easier to reach every day and touches no
 schema. V0.2B changes what the system can model, and needs a migration.
 
-**Gate: no new migration is written until the V0.1.2 upgrade test passes on a real phone**
-(`docs/test-checklist-v0.1.2-finance.md`, section 0). Migration 1 → 2 is verified against the
-schema Room generates, but nothing has yet proved it against a database holding real data.
-Stacking migration 2 → 3 on top of an unproven one would mean debugging two migrations at once,
-on the only copy of that data.
+**Gate: passed.** Migration 1 → 2 has now run on a phone holding real data and been lived with
+for a fortnight, so migration 2 → 3 can be written when V0.2B needs it. The rule that produced
+the gate still stands for the next one: a migration is not proved by CI, only by an upgrade over
+real data.
 
 ### V0.2A — Capture and reach (no schema change)
 
