@@ -44,7 +44,10 @@ Nothing new to store; the same information, presented so it can be acted on.
 - [ ] **Plan My Day: durations, capacity, timeboxing** — deliberately out of scope. These need a
       stronger model than V0.1.1 has, and a weak version would make the feature worse.
 
-## V0.1.2 — Finance (current)
+## V0.1.2 — Finance (merged, awaiting the on-device upgrade test)
+
+Built, merged and green in CI. Not yet declared stable: this is the first release to change
+the database, and that is only proved on a phone holding real data. See the gate under V0.2.
 
 - [x] Bank, cash, savings and wallet accounts with calculated balances
 - [x] Income, expenses and same-currency transfers
@@ -63,23 +66,61 @@ Nothing new to store; the same information, presented so it can be acted on.
 - [ ] Foreign exchange and multi-currency conversion
 - [ ] Investments
 - [ ] Bank API syncing
-- [ ] Finance entries from Quick Capture
+- [ ] Finance entries from Quick Capture — scheduled into V0.2A
 
 ## V0.2 — Depth
 
-- [ ] Areas of Life (group projects by area: Work, Personal, Health, etc.)
-- [ ] Goals (link projects to longer-term outcomes)
-- [ ] Idea Incubator (capture and develop ideas)
-- [ ] Android home-screen widget (quick capture + today summary)
-- [ ] Share to R-OS (Android share-sheet target into the Inbox)
-- [ ] App long-press shortcut straight into Capture
-- [ ] Image and file capture into the Inbox
-- [ ] Recurring tasks
-- [ ] Routines
-- [ ] Voice capture
-- [ ] File attachments
-- [ ] Improved search (FTS, filters)
+Split into two phases. V0.2A makes the system easier to reach every day and touches no
+schema. V0.2B changes what the system can model, and needs a migration.
+
+**Gate: no new migration is written until the V0.1.2 upgrade test passes on a real phone**
+(`docs/test-checklist-v0.1.2-finance.md`, section 0). Migration 1 → 2 is verified against the
+schema Room generates, but nothing has yet proved it against a database holding real data.
+Stacking migration 2 → 3 on top of an unproven one would mean debugging two migrations at once,
+on the only copy of that data.
+
+### V0.2A — Capture and reach (no schema change)
+
+Everything here writes to tables that already exist, so it can be built and shipped while the
+V0.1.2 upgrade test is still outstanding.
+
+- [ ] Share to R-OS — Android share-sheet target for text and links, straight into the Inbox
+- [ ] Home-screen widget — one-tap capture plus a today summary
+- [ ] App long-press shortcuts — New Task, Quick Capture, Add Expense
+- [ ] Finance Quick Capture — "Coffee 45" parsed into an expense against a chosen account
+
+Two details that decide the shape of this phase:
+
+- `inbox_items` holds text and a type, nothing else. Sharing **text or a link** fits that column;
+  sharing an **image or file** does not, and needs an attachment column or table. Image and file
+  capture therefore moves to V0.2B with the other schema work.
+- Finance Quick Capture writes a finance transaction directly, against tables V0.1.2 already
+  created. Parking a captured amount in the Inbox *unresolved* would need an amount column on
+  `inbox_items`, so the capture resolves at entry: account and category are chosen there, and
+  what lands is a real expense rather than a half-entry to process later.
+
+### V0.2B — Life architecture (one migration, after the gate)
+
+- [ ] Areas of Life — Finance, Work, Health, Scouts, Personal, Family
+- [ ] Goals — a goal belongs to an area; projects support goals; tasks support projects
+- [ ] Dashboard evolution — today, attention, goals progressing or stalled, financial position,
+      waiting, inbox, upcoming commitments
+- [ ] Image and file capture into the Inbox (needs the attachment column above)
 - [ ] Project progress indicators
+- [ ] Improved search (FTS, filters)
+
+Areas, goals and attachments are one migration, designed together and written once. The
+V0.1.2 CI check (`scripts/verify_room_migration.py`) applies unchanged: additive statements
+only, nothing that touches a table already holding user data.
+
+### Held back from V0.2, deliberately
+
+- [ ] **Recurring tasks** and **Routines** — these need a recurrence model (what a repeat *is*,
+      what happens when one is missed, whether history is per-occurrence) designed before any
+      code. Duplicating a task on a timer is the version that looks finished and then quietly
+      loses track of what was actually done.
+- [ ] Idea Incubator
+- [ ] Voice capture
 - [ ] Richer reminders (exact alarm, location)
 - [ ] Export (JSON / ZIP)
 
