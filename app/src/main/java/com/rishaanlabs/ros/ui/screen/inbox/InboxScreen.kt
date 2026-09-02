@@ -63,7 +63,8 @@ private enum class InboxMode { PROCESS, LIST }
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InboxScreen(
-    onBack: () -> Unit,
+    /** Null when the Inbox is shown as a root tab: there is nothing to go back to. */
+    onBack: (() -> Unit)? = null,
     viewModel: InboxViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,14 +76,16 @@ fun InboxScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Inbox") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            if (onBack != null) {
+                TopAppBar(
+                    title = { Text("Inbox") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding).fillMaxSize()) {

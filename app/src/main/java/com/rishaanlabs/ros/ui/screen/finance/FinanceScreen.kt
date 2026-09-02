@@ -55,7 +55,8 @@ private enum class FinanceTab(val title: String, val addKind: FinanceAddKind?) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FinanceScreen(
-    onBack: () -> Unit,
+    /** Null when Finance is shown as a root tab: there is nothing to go back to. */
+    onBack: (() -> Unit)? = null,
     viewModel: FinanceViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -76,14 +77,16 @@ fun FinanceScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Finance") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+            if (onBack != null) {
+                TopAppBar(
+                    title = { Text("Finance") },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {

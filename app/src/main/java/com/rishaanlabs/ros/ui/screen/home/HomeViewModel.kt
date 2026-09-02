@@ -4,6 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rishaanlabs.ros.data.local.entity.Task
 import com.rishaanlabs.ros.data.local.entity.TaskStatus
+import com.rishaanlabs.ros.data.local.entity.WaitingItem
+import com.rishaanlabs.ros.data.local.entity.WaitingStatus
+import com.rishaanlabs.ros.data.repository.FinanceRepository
 import com.rishaanlabs.ros.data.repository.InboxRepository
 import com.rishaanlabs.ros.data.repository.ProjectRepository
 import com.rishaanlabs.ros.data.repository.TaskRepository
@@ -18,6 +21,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 /**
@@ -27,6 +31,36 @@ import javax.inject.Inject
  * assemble itself in pieces as each one arrived, so they are combined into a single immutable
  * state object and shared as a StateFlow — the screen either has a briefing or it does not.
  */
+/** One line of the Home waiting list: who owes what, and how long it has been. */
+data class WaitingSummary(
+    val item: WaitingItem,
+    val daysWaiting: Long
+) {
+    /** The design turns red past a week — long enough that chasing it is the next action. */
+    val isStale: Boolean get() = daysWaiting > 5
+}
+
+/**
+ * The finance line on Home: position first, then how far through the month's plan the user is.
+ *
+ * Everything here is derived from figures Finance already computes. There is deliberately no
+ * "upcoming payments" list, which the design also shows — scheduled payments have no table, and
+ * inventing one is a migration.
+ */
+data class HomeFinance(
+    val currency: String = "MVR",
+    val totalCashMinor: Long = 0L,
+    val freeMinor: Long = 0L,
+    val plannedMinor: Long = 0L,
+    val spentAgainstPlanMinor: Long = 0L,
+    val hasAccounts: Boolean = false
+) {
+    /** How much of the month's limits is used. Null when no limit has been set to measure against. */
+    val planPercent: Int?
+        get() = if (plannedMinor <= 0L) null else
+            ((spentAgainstPlanMinor.toDouble() / plannedMinor.toDouble()) * 100).toInt().coerceIn(0, 999)
+}
+
 data class HomeUiState(
     val greeting: String = "",
     val date: LocalDate = LocalDate.now(),
@@ -38,20 +72,66 @@ data class HomeUiState(
     val unfinished: List<Task> = emptyList(),
     /** Everything Plan My Day may offer as a priority. */
     val priorityCandidates: List<Task> = emptyList(),
+    val waiting: List<WaitingSummary> = emptyList(),
+    val finance: HomeFinance = HomeFinance(),
     val loaded: Boolean = false
 ) {
     val unfinishedCount: Int get() = unfinished.size
 }
+
+/** The task-side half of Home, before the finance line is folded in. */
+private data class HomeCore(
+    val priorities: List<Task>,
+    val other: List<Task>,
+    val attention: List<AttentionItem>,
+    val inboxCount: Int,
+    val unfinished: List<Task>,
+    val waiting: List<WaitingSummary>
+)
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val taskRepository: TaskRepository,
     waitingRepository: WaitingRepository,
     inboxRepository: InboxRepository,
-    projectRepository: ProjectRepository
+    projectRepository: ProjectRepository,
+    financeRepository: FinanceRepository
 ) : ViewModel() {
 
-    val uiState = combine(
+    private val monthStart = LocalDate.now().withDayOfMonth(1).atStartOfDay()
+    private val nextMonthStart = monthStart.plusMonths(1)
+
+    /**
+     * The finance line, from figures Finance already derives.
+     *
+     * "Free" is cash minus what goals have earmarked, matching Finance's own definition so Home
+     * and Finance cannot quote different numbers. The plan is measured only against categories
+     * that actually carry a limit — including unlimited ones would make the percentage mean
+     * nothing.
+     */
+    private val financeLine = combine(
+        financeRepository.observeAccountBalances(),
+        financeRepository.observeGoalProgress(),
+        financeRepository.observeCategorySpend(monthStart, nextMonthStart, HOME_CURRENCY)
+    ) { accounts, goals, spend ->
+        val inCurrency = accounts.filter { it.account.currency.equals(HOME_CURRENCY, ignoreCase = true) }
+        val cash = inCurrency.sumOf { it.balanceMinor }
+        val earmarked = goals
+            .filter { it.goal.currency.equals(HOME_CURRENCY, ignoreCase = true) }
+            .sumOf { it.currentMinor.coerceAtLeast(0L) }
+        val limited = spend.filter { (it.monthlyBudgetMinor ?: 0L) > 0L }
+
+        HomeFinance(
+            currency = HOME_CURRENCY,
+            totalCashMinor = cash,
+            freeMinor = cash - earmarked,
+            plannedMinor = limited.sumOf { it.monthlyBudgetMinor ?: 0L },
+            spentAgainstPlanMinor = limited.sumOf { it.amountMinor },
+            hasAccounts = inCurrency.isNotEmpty()
+        )
+    }
+
+    private val core = combine(
         taskRepository.observeAllOpen(),
         taskRepository.observeToday(),
         waitingRepository.observeAll(),
@@ -81,19 +161,41 @@ class HomeViewModel @Inject constructor(
         // reviews can never disagree — they are the same list.
         val unfinished = unfinishedCandidates(openTasks, today)
 
-        HomeUiState(
-            greeting = greetingFor(LocalTime.now()),
-            date = today,
-            topPriorities = priorities,
-            otherTasks = other,
+        HomeCore(
+            priorities = priorities,
+            other = other,
             // The inbox gets its own section on Home, so it is not repeated inside the
             // attention list.
             attention = allAttention.filterNot { it.kind == AttentionKind.INBOX_UNPROCESSED },
             inboxCount = inboxCount,
             unfinished = unfinished,
+            waiting = waiting
+                .filter { it.status == WaitingStatus.WAITING || it.status == WaitingStatus.FOLLOW_UP_DUE }
+                .map {
+                    WaitingSummary(
+                        item = it,
+                        daysWaiting = ChronoUnit.DAYS.between(it.requestedDate.toLocalDate(), today)
+                            .coerceAtLeast(0L)
+                    )
+                }
+                .sortedByDescending { it.daysWaiting }
+        )
+    }
+
+    val uiState = combine(core, financeLine) { c, finance ->
+        HomeUiState(
+            greeting = greetingFor(LocalTime.now()),
+            date = LocalDate.now(),
+            topPriorities = c.priorities,
+            otherTasks = c.other,
+            attention = c.attention,
+            inboxCount = c.inboxCount,
+            unfinished = c.unfinished,
             // A priority can be chosen from anything open and relevant today, not only from what
             // today's query happened to return.
-            priorityCandidates = (priorities + other + unfinished).distinctBy { it.id },
+            priorityCandidates = (c.priorities + c.other + c.unfinished).distinctBy { it.id },
+            waiting = c.waiting,
+            finance = finance,
             loaded = true
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
@@ -154,3 +256,6 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
+
+/** Home shows one currency. Multi-currency needs a picker, which is a Finance decision. */
+private const val HOME_CURRENCY = "MVR"
