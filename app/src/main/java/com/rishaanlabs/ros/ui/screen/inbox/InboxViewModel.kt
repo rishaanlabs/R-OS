@@ -10,6 +10,8 @@ import com.rishaanlabs.ros.data.repository.NoteRepository
 import com.rishaanlabs.ros.data.repository.ProjectRepository
 import com.rishaanlabs.ros.data.repository.TaskRepository
 import com.rishaanlabs.ros.data.repository.WaitingRepository
+import com.rishaanlabs.ros.domain.capture.CapturedText
+import com.rishaanlabs.ros.domain.capture.splitCapturedText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
@@ -62,12 +64,23 @@ class InboxViewModel @Inject constructor(
         projectId: String? = null,
         date: LocalDate? = null,
         priority: TaskPriority = TaskPriority.NONE,
-        person: String = ""
+        person: String = "",
+        titleOverride: String? = null
     ) = viewModelScope.launch {
+        // One parse for every destination. A capture that reads as a heading with lines under it
+        // keeps that shape whether it becomes a task, a waiting item or a note; before this, only
+        // notes split the text and the other two turned the whole blob into a title.
+        val parsed = splitCapturedText(item.text)
+        val title = titleOverride?.trim()?.ifBlank { null } ?: parsed.proposedTitle
+        // Keeping the proposed title consumes the first line; replacing it means that line was an
+        // item after all, so it stays in the body.
+        val body = parsed.bodyFor(title)
+
         when (destination) {
             ProcessDestination.TASK -> {
                 val task = taskRepository.create(
-                    title = item.text,
+                    title = title,
+                    description = body,
                     projectId = projectId,
                     priority = priority
                 )
@@ -77,23 +90,28 @@ class InboxViewModel @Inject constructor(
             }
 
             ProcessDestination.WAITING -> waitingRepository.create(
-                title = item.text,
+                title = title,
                 person = person,
+                description = body,
                 projectId = projectId,
                 followUpDate = date?.atStartOfDay()
             )
 
-            // Notes need a title, and a captured thought is a single blob of text. Long captures
-            // read badly as a title, so the first line becomes the title and the rest the body.
-            ProcessDestination.NOTE -> {
-                val trimmed = item.text.trim()
-                val title = trimmed.lineSequence().first().take(80).ifBlank { "Note" }
-                val body = trimmed.removePrefix(title).trim()
-                noteRepository.create(title = title, body = body, projectId = projectId)
-            }
+            ProcessDestination.NOTE -> noteRepository.create(
+                title = title,
+                body = body,
+                projectId = projectId
+            )
         }
         inboxRepository.markProcessed(item)
     }
+
+    /**
+     * What the processor should show for an item: the title to offer, and whether to ask before
+     * committing it. The screen calls this rather than parsing the text itself, so the title the
+     * user confirms is the one [process] would otherwise have used.
+     */
+    fun preview(item: InboxItem): CapturedText = splitCapturedText(item.text)
 
     /** The item was not worth keeping. */
     fun delete(item: InboxItem) = viewModelScope.launch { inboxRepository.delete(item) }

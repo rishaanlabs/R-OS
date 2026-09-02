@@ -55,6 +55,17 @@ interface FinanceDao {
     @Update
     suspend fun updateAccount(account: FinanceAccount)
 
+    @Query("DELETE FROM finance_accounts WHERE id = :id")
+    suspend fun deleteAccountById(id: String)
+
+    /**
+     * Transactions referencing this account either way round. The accountId foreign key is
+     * NO_ACTION, so deleting an account with transactions would be refused by SQLite; this lets
+     * the repository say why instead of surfacing a constraint failure.
+     */
+    @Query("SELECT COUNT(*) FROM finance_transactions WHERE accountId = :id OR destinationAccountId = :id")
+    suspend fun countTransactionsForAccount(id: String): Int
+
     @Query("SELECT COUNT(*) FROM finance_categories")
     suspend fun categoryCount(): Int
 
@@ -79,8 +90,22 @@ interface FinanceDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertTransaction(transaction: FinanceTransaction)
 
+    @Update
+    suspend fun updateTransaction(transaction: FinanceTransaction)
+
     @Query("DELETE FROM finance_transactions WHERE id = :id")
     suspend fun deleteTransactionById(id: String)
+
+    /**
+     * The loan payment recorded alongside this transaction, if any. A debt payment writes both
+     * rows together, so removing one without the other would leave the loan and the account
+     * disagreeing about whether the money was paid.
+     */
+    @Query("SELECT * FROM finance_loan_payments WHERE financeTransactionId = :transactionId LIMIT 1")
+    suspend fun getLoanPaymentByTransactionId(transactionId: String): LoanPayment?
+
+    @Query("DELETE FROM finance_loan_payments WHERE id = :id")
+    suspend fun deleteLoanPaymentById(id: String)
 
     @Query("""
         SELECT
@@ -150,6 +175,12 @@ interface FinanceDao {
     @Update
     suspend fun updateGoal(goal: SavingsGoal)
 
+    @Query("DELETE FROM finance_goals WHERE id = :id")
+    suspend fun deleteGoalById(id: String)
+
+    @Query("SELECT COUNT(*) FROM finance_goal_allocations WHERE goalId = :id")
+    suspend fun countAllocationsForGoal(id: String): Int
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertGoalAllocation(allocation: GoalAllocation)
 
@@ -180,6 +211,12 @@ interface FinanceDao {
 
     @Update
     suspend fun updateLoan(loan: Loan)
+
+    @Query("DELETE FROM finance_loans WHERE id = :id")
+    suspend fun deleteLoanById(id: String)
+
+    @Query("SELECT COUNT(*) FROM finance_loan_payments WHERE loanId = :id")
+    suspend fun countPaymentsForLoan(id: String): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertLoanPayment(payment: LoanPayment)

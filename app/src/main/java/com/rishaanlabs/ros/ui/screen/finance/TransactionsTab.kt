@@ -1,5 +1,6 @@
 package com.rishaanlabs.ros.ui.screen.finance
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,7 +17,11 @@ import com.rishaanlabs.ros.data.local.entity.FinanceTransactionType
 import com.rishaanlabs.ros.domain.finance.formatMoney
 
 @Composable
-fun TransactionsTab(state: FinanceUiState, contentPadding: PaddingValues) {
+fun TransactionsTab(
+    state: FinanceUiState,
+    contentPadding: PaddingValues,
+    onOpen: (FinanceTarget) -> Unit
+) {
     val accountNames = state.accounts.associate { it.account.id to it.account.name }
     val categoryNames = state.categories.associate { it.id to it.name }
     LazyColumn(
@@ -27,7 +32,16 @@ fun TransactionsTab(state: FinanceUiState, contentPadding: PaddingValues) {
         ),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        item { Text("Transactions", style = MaterialTheme.typography.headlineSmall) }
+        item {
+            Text("Transactions", style = MaterialTheme.typography.headlineSmall)
+        }
+        item {
+            Text(
+                "Tap a transaction to correct or remove it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (state.transactions.isEmpty()) item { Text("Record income, expenses and transfers here.") }
         items(state.transactions.size) { index ->
             val tx = state.transactions[index]
@@ -36,7 +50,11 @@ fun TransactionsTab(state: FinanceUiState, contentPadding: PaddingValues) {
                 FinanceTransactionType.EXPENSE, FinanceTransactionType.DEBT_PAYMENT -> "−"
                 FinanceTransactionType.TRANSFER -> "↔"
             }
-            Card(Modifier.fillMaxWidth()) {
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpen(FinanceTarget.Transaction(tx)) }
+            ) {
                 Row(
                     Modifier.fillMaxWidth().padding(14.dp),
                     horizontalArrangement = Arrangement.SpaceBetween

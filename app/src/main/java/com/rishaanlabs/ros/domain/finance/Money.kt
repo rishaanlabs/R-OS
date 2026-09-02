@@ -24,3 +24,14 @@ fun formatMoney(minor: Long, currency: String = "MVR"): String {
     }.format(amount)
     return "${currency.uppercase()} $number"
 }
+
+/**
+ * Renders a stored amount as plain text for an input field.
+ *
+ * Editing an existing record has to put the amount back into the same box it was typed into, so
+ * this is deliberately not [formatMoney]: no currency, no grouping separators, nothing that
+ * [parseMajorToMinor] would have to strip again. What comes out here always parses back to the
+ * value that went in.
+ */
+fun minorToEditableMajor(minor: Long): String =
+    BigDecimal.valueOf(minor, MINOR_SCALE).toPlainString()

@@ -44,7 +44,12 @@ Nothing new to store; the same information, presented so it can be acted on.
 - [ ] **Plan My Day: durations, capacity, timeboxing** — deliberately out of scope. These need a
       stronger model than V0.1.1 has, and a weak version would make the feature worse.
 
-## V0.1.2 — Finance (current)
+## V0.1.2 — Finance (stable, real-device migration verified)
+
+Upgraded over a V0.1.1 install holding real data through Android's normal Update flow, then used
+daily for about a fortnight: no crash, no migration error, no reset, nothing missing. That closes
+the Room 1 → 2 gate — the migration is proved against a real database, not only against the
+schema Room generates.
 
 - [x] Bank, cash, savings and wallet accounts with calculated balances
 - [x] Income, expenses and same-currency transfers
@@ -63,23 +68,100 @@ Nothing new to store; the same information, presented so it can be acted on.
 - [ ] Foreign exchange and multi-currency conversion
 - [ ] Investments
 - [ ] Bank API syncing
-- [ ] Finance entries from Quick Capture
+- [ ] Finance entries from Quick Capture — scheduled into V0.2A
+
+## V0.1.3 — Finance corrections and capture structure (current)
+
+Two weeks of real use found problems that designing the screens had not.
+
+- [x] Every finance record can be corrected: accounts, transactions, savings goals and loans open
+      to an edit form rather than being permanently whatever they were first typed as
+- [x] Every finance record can be deleted, with a confirmation that states the consequence
+- [x] Deletion refuses where it would corrupt data, and says what to do instead — an account
+      with transactions offers archiving rather than a database-level failure
+- [x] Deleting a debt payment removes its loan payment too, so the loan and the account cannot
+      disagree about whether money was paid
+- [x] Validation failures show a message instead of crashing the app — an amount field with a
+      letter in it used to take the process down
+- [x] Finance is five sections rather than six: monthly limits moved beside the spending they
+      constrain, and Overview no longer repeats the Savings tab in full
+- [x] The add button adds what the current tab is about, instead of opening a four-way picker
+      on every tab
+- [x] Multi-line captures keep their structure: "Shopping / Milk / Eggs / Bread" becomes a task
+      titled Shopping with the list in its notes, not one unreadable heading
+- [x] A list with no heading is not silently titled after its first item; the processor asks
+- [x] No schema change — Room stays at version 2
+
+### Deferred from V0.1.3
+
+- [ ] Reversing a transaction rather than deleting it. Releasing money from a goal already works
+      this way (a negative allocation, which leaves both entries in the history); transactions
+      delete outright. A correcting-entry model is the better long-term answer and needs its own
+      design.
+- [ ] Editing a debt payment in place. Its principal and interest split lives on the loan, so
+      correcting one currently means deleting it and recording it again.
+- [ ] Archived accounts have no screen. Archiving is offered as the safe alternative to deleting,
+      but nothing lists what has been archived or restores it.
 
 ## V0.2 — Depth
 
-- [ ] Areas of Life (group projects by area: Work, Personal, Health, etc.)
-- [ ] Goals (link projects to longer-term outcomes)
-- [ ] Idea Incubator (capture and develop ideas)
-- [ ] Android home-screen widget (quick capture + today summary)
-- [ ] Share to R-OS (Android share-sheet target into the Inbox)
-- [ ] App long-press shortcut straight into Capture
-- [ ] Image and file capture into the Inbox
-- [ ] Recurring tasks
-- [ ] Routines
-- [ ] Voice capture
-- [ ] File attachments
-- [ ] Improved search (FTS, filters)
+Split into two phases. V0.2A makes the system easier to reach every day and touches no
+schema. V0.2B changes what the system can model, and needs a migration.
+
+**Gate: passed.** Migration 1 → 2 has now run on a phone holding real data and been lived with
+for a fortnight, so migration 2 → 3 can be written when V0.2B needs it. The rule that produced
+the gate still stands for the next one: a migration is not proved by CI, only by an upgrade over
+real data.
+
+### V0.2A — Capture and reach (no schema change)
+
+Everything here writes to tables that already exist, so it can be built and shipped while the
+V0.1.2 upgrade test is still outstanding.
+
+- [ ] Share to R-OS — Android share-sheet target for text and links, straight into the Inbox
+- [ ] Home-screen widget — one-tap capture plus a today summary
+- [ ] App long-press shortcuts — New Task, Quick Capture, Add Expense
+- [ ] Finance Quick Capture — "Coffee 45" parsed into an expense against a chosen account
+
+Two details that decide the shape of this phase:
+
+- `inbox_items` holds text and a type, nothing else. Sharing **text or a link** fits that column;
+  sharing an **image or file** does not, and needs an attachment column or table. Image and file
+  capture therefore moves to V0.2B with the other schema work.
+- Finance Quick Capture writes a finance transaction directly, against tables V0.1.2 already
+  created. Parking a captured amount in the Inbox *unresolved* would need an amount column on
+  `inbox_items`, so the capture resolves at entry: account and category are chosen there, and
+  what lands is a real expense rather than a half-entry to process later.
+
+### V0.2B — Life architecture (one migration, after the gate)
+
+The R-OS Mobile design added three more schema-dependent needs — scheduled payments, whether a
+transaction has been reviewed, and activity history. They are scoped together with the tooling
+changes they require in `docs/migration-2-3-scope.md`; that document is the plan for migration
+2 → 3, and it should be read before any of the items below are started, because Areas and Goals
+may want to share the same migration.
+
+
+- [ ] Areas of Life — Finance, Work, Health, Scouts, Personal, Family
+- [ ] Goals — a goal belongs to an area; projects support goals; tasks support projects
+- [ ] Dashboard evolution — today, attention, goals progressing or stalled, financial position,
+      waiting, inbox, upcoming commitments
+- [ ] Image and file capture into the Inbox (needs the attachment column above)
 - [ ] Project progress indicators
+- [ ] Improved search (FTS, filters)
+
+Areas, goals and attachments are one migration, designed together and written once. The
+V0.1.2 CI check (`scripts/verify_room_migration.py`) applies unchanged: additive statements
+only, nothing that touches a table already holding user data.
+
+### Held back from V0.2, deliberately
+
+- [ ] **Recurring tasks** and **Routines** — these need a recurrence model (what a repeat *is*,
+      what happens when one is missed, whether history is per-occurrence) designed before any
+      code. Duplicating a task on a timer is the version that looks finished and then quietly
+      loses track of what was actually done.
+- [ ] Idea Incubator
+- [ ] Voice capture
 - [ ] Richer reminders (exact alarm, location)
 - [ ] Export (JSON / ZIP)
 

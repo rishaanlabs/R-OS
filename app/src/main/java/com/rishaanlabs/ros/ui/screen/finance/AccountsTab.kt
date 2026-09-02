@@ -1,5 +1,6 @@
 package com.rishaanlabs.ros.ui.screen.finance
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,7 +15,11 @@ import androidx.compose.ui.unit.dp
 import com.rishaanlabs.ros.domain.finance.formatMoney
 
 @Composable
-fun AccountsTab(state: FinanceUiState, contentPadding: PaddingValues) {
+fun AccountsTab(
+    state: FinanceUiState,
+    contentPadding: PaddingValues,
+    onOpen: (FinanceTarget) -> Unit
+) {
     LazyColumn(
         contentPadding = PaddingValues(
             start = 16.dp, end = 16.dp,
@@ -23,13 +28,26 @@ fun AccountsTab(state: FinanceUiState, contentPadding: PaddingValues) {
         ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        item { Text("Where your money is", style = MaterialTheme.typography.headlineSmall) }
+        item {
+            Text("Where your money is", style = MaterialTheme.typography.headlineSmall)
+        }
+        item {
+            Text(
+                "Tap an account to correct or remove it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         if (state.accounts.isEmpty()) {
             item { Text("Add your first bank, cash or wallet account.") }
         }
         items(state.accounts.size) { index ->
             val row = state.accounts[index]
-            Card(Modifier.fillMaxWidth()) {
+            Card(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { onOpen(FinanceTarget.Account(row.account)) }
+            ) {
                 Text(row.account.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(16.dp, 14.dp, 16.dp, 2.dp))
                 if (row.account.institution.isNotBlank()) {
                     Text(row.account.institution, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(horizontal = 16.dp))

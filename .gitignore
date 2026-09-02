@@ -16,7 +16,11 @@ local.properties
 
 # Generated files
 app/src/main/java/com/rishaanlabs/ros/data/local/RosDatabase_Impl*
-app/schemas/
+
+# app/schemas/ is deliberately NOT ignored. Room exports only the current version, so a migration
+# from N to N+1 has no way to know what N looked like unless N's schema is in the repository. It
+# also makes a schema change show up as a diff in review, which is the only place anyone will
+# notice one.
 
 # Dependency cache
 .gradle/

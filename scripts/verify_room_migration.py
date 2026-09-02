@@ -11,7 +11,14 @@ That check normally only happens on a real device. This script brings it forward
 comparing the migration's SQL with the createSql Room generates into its exported schema JSON.
 
 It also refuses to let the migration touch any table that existed before, which is the other way
-an upgrade can destroy data.
+an upgrade can destroy data. "Touch" means create, drop, rewrite or delete from — adding a column
+is allowed, because ALTER TABLE ... ADD COLUMN is the one form of ALTER that cannot destroy data:
+SQLite appends the column and backfills the declared default without rewriting a single row.
+
+An added column is checked against the exported schema too. That is the case Room's own launch-time
+validation is strictest about and the one this script used to ignore entirely: a column whose
+affinity, nullability or default disagrees with the entity by a single character throws on the
+first open after the upgrade.
 
 Usage: verify_room_migration.py <schema-dir> <migration.kt> <from-version> <to-version>
 """
@@ -23,9 +30,9 @@ import pathlib
 import re
 import sys
 
-# Tables that already hold user data before this migration runs. The migration may not create,
-# drop, alter or delete from any of them.
-PRE_EXISTING_TABLES = {
+# The v1 table list. Only used when there is no exported from-version schema to derive the real
+# set from, which now means v1 alone — every later version exports its schema and commits it.
+V1_TABLES = {
     "inbox_items",
     "projects",
     "tasks",
@@ -34,9 +41,20 @@ PRE_EXISTING_TABLES = {
     "daily_reviews",
 }
 
+# Statements that can destroy data outright, wherever they appear.
 DESTRUCTIVE = re.compile(
-    r"\b(DROP\s+TABLE|DROP\s+INDEX|DELETE\s+FROM|TRUNCATE|ALTER\s+TABLE)\b", re.IGNORECASE
+    r"\b(DROP\s+TABLE|DROP\s+INDEX|DELETE\s+FROM|TRUNCATE)\b", re.IGNORECASE
 )
+
+# The only permitted form of ALTER: appending a column. Anything else — RENAME, DROP COLUMN — either
+# rewrites the table or removes data, so it is rejected below.
+ADD_COLUMN = re.compile(
+    r"^\s*ALTER\s+TABLE\s+`?(?P<table>[A-Za-z_][A-Za-z0-9_]*)`?\s+"
+    r"ADD\s+(?:COLUMN\s+)?(?P<definition>.+?)\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+ANY_ALTER = re.compile(r"\bALTER\s+TABLE\b", re.IGNORECASE)
 
 # Where a table name can appear in a statement. Matching only these positions avoids a false
 # alarm when a column happens to share a name with a table.
@@ -67,6 +85,24 @@ def tokens(sql: str) -> tuple[str, ...]:
     a missing column) changes the tokens.
     """
     return tuple(t.upper() if not t.startswith("`") else t for t in TOKEN.findall(sql.rstrip().rstrip(";")))
+
+
+def column_definition(field: dict) -> str:
+    """The column definition Room's schema implies, in the form an ADD COLUMN would write it."""
+    parts = [f"`{field['columnName']}`", field["affinity"]]
+    if field.get("notNull"):
+        parts.append("NOT NULL")
+    if field.get("defaultValue") is not None:
+        parts.append(f"DEFAULT {field['defaultValue']}")
+    return " ".join(parts)
+
+
+def fields_by_table(schema: dict) -> dict[str, dict[str, dict]]:
+    """Every entity's columns, keyed by table then column name."""
+    return {
+        entity["tableName"]: {f["columnName"]: f for f in entity["fields"]}
+        for entity in schema["entities"]
+    }
 
 
 def extract_statements(migration_src: str) -> list[str]:
@@ -116,40 +152,58 @@ def main() -> int:
 
     problems: list[str] = []
 
-    # ---- 1. The migration must not touch anything that already holds data.
+    new_schema = load_schema(schema_dir, to_version)["database"]
+    new_tables = {e["tableName"] for e in new_schema["entities"]}
+
+    # Which tables already hold data is derived from the exported from-version schema rather than a
+    # literal, so the set grows with the app. v1 is the only version that never exported one.
+    old_schema = load_schema(schema_dir, from_version, required=from_version > 1)
+    if old_schema is not None:
+        protected = {e["tableName"] for e in old_schema["database"]["entities"]}
+    else:
+        protected = set(V1_TABLES)
+        print(f"(no exported v{from_version} schema; using the known v1 table list)")
+
+    old_tables = set(protected)
+    added = new_tables - old_tables
+    added_columns: list[tuple[str, str]] = []
+
+    # ---- 1. The migration may add, but never rewrite or remove.
     for raw in statements:
         statement = normalise(raw)
+
         if DESTRUCTIVE.search(statement):
             problems.append(f"destructive statement in migration: {statement[:120]}")
-        for _, table in enumerate(TABLE_POSITIONS.findall(statement)):
-            if table in PRE_EXISTING_TABLES:
+            continue
+
+        add = ADD_COLUMN.match(statement)
+        if add:
+            added_columns.append((add.group("table"), add.group("definition")))
+            continue
+
+        if ANY_ALTER.search(statement):
+            problems.append(
+                "only ALTER TABLE ... ADD COLUMN is allowed; anything else rewrites the table: "
+                f"{statement[:120]}"
+            )
+            continue
+
+        for table in TABLE_POSITIONS.findall(statement):
+            if table in protected:
                 problems.append(
                     f"migration operates on the pre-existing table '{table}': {statement[:120]}"
                 )
 
-    new_schema = load_schema(schema_dir, to_version)["database"]
-    new_tables = {e["tableName"] for e in new_schema["entities"]}
+    removed = old_tables - new_tables
+    if removed:
+        problems.append(
+            f"tables present in v{from_version} but gone in v{to_version}: {sorted(removed)}"
+        )
 
-    # The v1 schema was never committed, so fall back to the known table list when it is absent.
-    old_schema = load_schema(schema_dir, from_version, required=False)
-    if old_schema is not None:
-        old_tables = {e["tableName"] for e in old_schema["database"]["entities"]}
-        removed = old_tables - new_tables
-        if removed:
-            problems.append(
-                f"tables present in v{from_version} but gone in v{to_version}: {sorted(removed)}"
-            )
-    else:
-        old_tables = set(PRE_EXISTING_TABLES)
-        print(f"(no exported v{from_version} schema; using the known pre-existing table list)")
-
-    missing = PRE_EXISTING_TABLES - new_tables
-    if missing:
-        problems.append(f"tables that hold user data are no longer in the schema: {sorted(missing)}")
-
-    added = new_tables - old_tables
     print(f"v{from_version} tables: {len(old_tables)}   v{to_version} tables: {len(new_tables)}")
     print(f"added by this migration: {sorted(added)}")
+    if added_columns:
+        print(f"columns added: {sorted(f'{t}.{d.split()[0].strip(chr(96))}' for t, d in added_columns)}")
 
     # ---- 2. Every added table must be created exactly as Room expects it.
     for entity in new_schema["entities"]:
@@ -177,6 +231,56 @@ def main() -> int:
                     f"\n    Room expects: {normalise(expected_index)}"
                 )
 
+    # ---- 3. Every added column must match the column Room expects.
+    #
+    # Room compares affinity, nullability and default at launch and throws if any of them differs,
+    # on the database holding the user's only copy. Nothing checked this before: the table pass
+    # above only looks at tables in `added`, so a column bolted onto an existing table went
+    # entirely unverified.
+    schema_fields = fields_by_table(new_schema)
+    for table, definition in added_columns:
+        if table not in schema_fields:
+            problems.append(
+                f"migration adds a column to '{table}', which is not in the v{to_version} schema"
+            )
+            continue
+
+        name = definition.split()[0].strip("`")
+        field = schema_fields[table].get(name)
+        if field is None:
+            problems.append(
+                f"migration adds column '{table}.{name}', which no entity declares"
+            )
+            continue
+
+        expected = column_definition(field)
+        if tokens(expected) != tokens(definition):
+            problems.append(
+                f"\n  column '{table}.{name}' is not added the way Room expects."
+                f"\n    Room expects:  {expected}"
+                f"\n    migration has: {normalise(definition)}"
+            )
+
+    # A column an entity declares but the migration never adds fails the same way, and is the
+    # easier mistake to make: the entity changes and the migration is forgotten.
+    for table in sorted(set(schema_fields) & old_tables):
+        if old_schema is None:
+            break
+        old_columns = {
+            f["columnName"]
+            for entity in old_schema["database"]["entities"]
+            if entity["tableName"] == table
+            for f in entity["fields"]
+        }
+        declared_new = set(schema_fields[table]) - old_columns
+        migrated = {d.split()[0].strip("`") for t, d in added_columns if t == table}
+        forgotten = declared_new - migrated
+        if forgotten:
+            problems.append(
+                f"'{table}' gained {sorted(forgotten)} in v{to_version} but the migration never "
+                "adds them"
+            )
+
     if problems:
         print("\nMigration check FAILED:\n")
         for problem in problems:
@@ -187,7 +291,7 @@ def main() -> int:
         return 1
 
     print(f"\nMigration {from_version} -> {to_version} matches the exported schema exactly.")
-    print("No pre-existing table is created, altered, dropped or deleted from.")
+    print("No pre-existing table is created, rewritten, dropped or deleted from.")
     return 0
 
 

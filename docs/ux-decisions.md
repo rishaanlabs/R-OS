@@ -72,6 +72,40 @@ processing anyway. Revisit if a migration is needed for other reasons.
 
 ---
 
+## Finance capture — the one place classification happens at entry
+
+**Decision.** Finance Quick Capture resolves fully at entry. `Coffee 45` writes a real expense
+against a real account and category; it never lands in the Inbox as an unresolved amount. This
+is a deliberate exception to *capture first, classify later*, and the only one.
+
+**Why the principle does not apply here.** That principle protects a thought whose shape is not
+yet known — the user does not yet understand what they captured, so making them classify it
+costs the capture. A spend is the opposite: it has already happened, the amount is known, and
+the account it came from is known at the moment it is typed. There is no understanding still to
+arrive. Deferring it does not protect anything; it just means the same two facts get supplied
+later, from memory, with less certainty than the user had at the till.
+
+**Why it is not merely convenient.** A half-formed money object is worse than a half-formed
+thought. An unclassified inbox item is a note that reads oddly until processed. An unclassified
+expense is a balance that is silently wrong — the account it came out of has not moved, so every
+figure downstream (this month versus last, category limits, runway) is quoting a number that
+does not match reality. Finance is the one area where an unprocessed item corrupts the answers
+other screens are giving.
+
+**Consequence — resolution must not read as a form.** Fast is still the requirement; the
+exception buys correctness, not the right to be slow. `Coffee 45` should parse to amount 45 with
+"Coffee" matched against existing categories and recent descriptions, leaving account and
+category as two taps against sensible defaults, not an empty transaction screen. If capture ever
+degrades into filling in fields, the exception has failed and is worth revisiting — but the fix
+is a better resolution step, not an unresolved expense.
+
+**Consequence — no schema debt.** Because it resolves at entry, it writes only to the finance
+tables V0.1.2 already created. Parking an unresolved amount would need an amount column on
+`inbox_items` — a migration. The product argument and the schema argument reach the same place,
+which is why this is settled rather than provisional.
+
+---
+
 ## Inbox — process, do not browse
 
 **Decision.** The Inbox opens in Process mode: one item, one question, straight to the next.
@@ -156,6 +190,91 @@ Neither is styled as a problem or a celebration.
 **Why.** A clear day is a legitimate outcome, not a failure to plan. Illustrations and
 congratulation animations would make an ordinary state feel like an event, which gets tiring by
 the third time.
+
+---
+
+## Finance — a record you cannot correct is worse than one you never made
+
+**Decision.** Every finance record can be edited and deleted. Deleting always asks first, and the
+question states what will actually happen rather than warning generically.
+
+**Why.** Finance shipped able to create accounts, transactions, goals and loans and unable to
+change any of them. A savings goal typed with the wrong target was permanent, and the only way
+to remove it was to clear the app's data — which would have taken every project, task, note and
+waiting item with it. That is not a missing convenience; it makes the whole app unsafe to
+experiment with, and a personal system nobody dares put wrong data into is a system nobody puts
+data into.
+
+**Consequence.** Deletion is not uniform, because the data model is not. An account with
+transactions cannot be deleted — the foreign key is NO_ACTION and the database itself would
+refuse — so the app refuses first and offers archiving, which keeps the history and the balances.
+A savings goal deletes freely: its allocations are virtual, so releasing them moves no real money.
+A loan deletes its payment records but never the transactions that paid them, because that money
+genuinely left the account. Deleting a debt payment removes both of its rows, since the loan and
+the account would otherwise disagree about whether it was paid.
+
+**Deliberately not done.** A full reversal and audit model. Releasing money from a goal already
+works by correcting entry — a negative allocation, leaving both entries in the history — and
+transactions delete outright. Making everything work by correcting entry is the better long-term
+answer and needs its own design; a half version would have meant a migration on a database that
+now holds real money.
+
+---
+
+## Finance — the add button adds the thing you are looking at
+
+**Decision.** Each Finance section's add button creates that section's kind of record. The
+four-way picker survives only on Overview, where there is no obvious answer.
+
+**Why.** Every add went through the same picker — on the Accounts tab, the button asked whether
+you meant an account, a transaction, a goal or a loan. That is two extra decisions on top of
+every entry, on the screen used most often and usually in a hurry, and it is why Finance felt
+heavy to operate long before any individual form was at fault.
+
+**Consequence.** Monthly limits moved out of their own tab and next to the spending they
+constrain, and Overview stopped repeating the Savings tab in full — the same goals appeared twice
+at different levels of detail, and neither read as the authoritative one. Six sections became
+five.
+
+---
+
+## Finance — a failed action says so
+
+**Decision.** Validation failures surface as a message. The screen never lets one escape.
+
+**Why.** Every repository call validates with `require`, and an exception thrown inside
+`viewModelScope` reaches the default handler and kills the process. Typing a letter into an
+amount field crashed the app. A financial tool that closes rather than saying "Amount is
+required" cannot be trusted with anything.
+
+---
+
+## Capture — structure the user typed is structure worth keeping
+
+**Decision.** A multi-line capture becomes a title plus a body, for tasks and waiting items as
+well as notes. Where the first line cannot be shown to be a heading, the processor asks instead
+of guessing.
+
+**Why.** Capture takes free text and asks nothing, which is right (see *Capture — capture first,
+classify later*) — but it means a list arrives as one string, and something has to recover its
+shape later. Processing used to put the entire blob into the title, so a shopping list became one
+unreadable heading and the list itself was gone. Only notes split the text; tasks and waiting
+items did not.
+
+**Consequence.** "Shopping / Milk / Eggs / Bread" and "Milk / Eggs / Bread" are not
+distinguishable from the text — the first line is a heading in one and an item in the other, and
+telling them apart needs to understand the words. So the app does not try. It proposes the first
+line, and what the user does with that proposal decides the question: keeping it treats the line
+as a heading and consumes it, replacing it treats the line as an item and keeps it in the list.
+No line is ever lost either way, which is the property the unit tests actually assert.
+
+**Deliberately not done.** Generating titles from a model. A local vocabulary offers "Shopping
+list" when the lines look like groceries, and that is the whole of it — the user sees and can
+overwrite the result, and nothing downstream depends on the guess being right. A confidently
+wrong title is worse than an honest prompt.
+
+**Left open.** Turning one captured list into several tasks. The parse already returns the
+individual lines, so the processor can grow that action without the parsing being redesigned.
 
 ---
 
